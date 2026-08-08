@@ -171,6 +171,37 @@ function saveBekleyenYazilar(liste) {
     }
 }
 
+/* Yazar kimlik doğrulaması. Başarılıysa veritabanındaki yazar kaydını,
+   değilse null döner. Kullanıcı adı VEYA görünen ad ile eşleşmeye izin verir
+   (/api/author-submit-article'daki mevcut davranışla aynı).
+   Yönetici de bir yazar adına işlem yapabilsin diye admin kimliği kabul edilir;
+   o durumda hedef yazar `authorName` ile bulunur. */
+function yazarDogrula(username, password, authorName) {
+    const uName = (username || '').trim().toLowerCase();
+    const pwd = (password || '').trim();
+    const hedefAd = (authorName || '').trim();
+
+    const dbPath = path.join(__dirname, 'veritabani', 'yazarlar_veritabani.json');
+    if (!fs.existsSync(dbPath)) return null;
+
+    let db;
+    try {
+        db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+    } catch (e) {
+        return null;
+    }
+
+    if (yoneticiMi(username, password)) {
+        return db.find(a => (a.name || '').trim().toLocaleUpperCase('tr') === hedefAd.toLocaleUpperCase('tr')) || null;
+    }
+
+    return db.find(a =>
+        ((a.username || '').trim().toLowerCase() === uName ||
+         (a.name || '').trim().toLocaleUpperCase('tr') === hedefAd.toLocaleUpperCase('tr')) &&
+        (a.password || 'mektep123') === pwd
+    ) || null;
+}
+
 function yoneticiMi(username, password) {
     const u = (username || '').trim().toLowerCase();
     const p = (password || '').trim();
@@ -399,8 +430,12 @@ const server = http.createServer((req, res) => {
                 const hedefYazarAdi = authorRecord ? authorRecord.name : (yazarAdi || 'YAZAR');
                 const bekleyenler = getBekleyenYazilar();
 
-                const ayniBekleyen = bekleyenler.find(b => 
-                    b.authorName.toLocaleUpperCase('tr') === hedefYazarAdi.toLocaleUpperCase('tr') && 
+                /* Yalnızca HÂLÂ BEKLEYEN kayıtlara bakılır. Karar verilmiş
+                   kayıtlar listede kaldığı için bu filtre olmazsa, reddedilen
+                   bir yazı düzeltilip aynı başlıkla tekrar gönderilemezdi. */
+                const ayniBekleyen = bekleyenler.find(b =>
+                    (b.status || 'pending') === 'pending' &&
+                    b.authorName.toLocaleUpperCase('tr') === hedefYazarAdi.toLocaleUpperCase('tr') &&
                     basligiNormalize(b.title) === basligiNormalize(baslik)
                 );
 
@@ -428,6 +463,105 @@ const server = http.createServer((req, res) => {
                     success: true,
                     message: 'Yazınız başarıyla kaydedildi ve yönetici onayına gönderildi. Yönetici onayladıktan sonra e-kitapçığınızda yayınlanacaktır.',
                     id: yeniBekleyen.id
+                }));
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ success: false, message: 'Sunucu hatası: ' + e.message }));
+            }
+        });
+        return;
+    }
+
+    /* API: Yazarın KENDİ gönderdiği yazıların durumu.
+       Yazar yalnızca kendi kayıtlarını görür; başkasının gönderisini
+       göremez. İçerik de dönülür, çünkü reddedilen yazıyı düzenleme
+       kutusuna doldurmak gerekiyor. */
+    if (req.method === 'GET' && pathname === '/api/my-submissions') {
+        const q = urlObj.searchParams;
+        const yazar = yazarDogrula(q.get('username'), q.get('password'), q.get('authorName'));
+
+        if (!yazar) {
+            res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ success: false, message: 'Kimlik doğrulama başarısız.' }));
+            return;
+        }
+
+        const benimkiler = getBekleyenYazilar()
+            .filter(b => (b.authorName || '').toLocaleUpperCase('tr') === yazar.name.toLocaleUpperCase('tr'))
+            .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: true, submissions: benimkiler }));
+        return;
+    }
+
+    /* API: Reddedilen yazıyı düzeltip yeniden onaya gönderme.
+       Yeni kayıt AÇILMAZ; aynı kayıt güncellenip tekrar 'pending' yapılır.
+       Böylece yazar aynı yazıyı takip etmeye devam eder. Önceki red kararı
+       `gecmis` dizisinde saklanır — hangi gerekçeyle kaç kez reddedildiği
+       kaybolmasın. */
+    if (req.method === 'POST' && pathname === '/api/author-resubmit-article') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const d = JSON.parse(body || '{}');
+                const yazar = yazarDogrula(d.username, d.password, d.authorName);
+
+                if (!yazar) {
+                    res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: false, message: 'Kimlik doğrulama başarısız.' }));
+                    return;
+                }
+
+                const baslik = (d.title || '').trim();
+                const icerik = (d.content || '').replace(/\r\n/g, '\n').trim();
+
+                if (!baslik || !icerik) {
+                    res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: false, message: 'Lütfen başlık ve içeriği doldurun.' }));
+                    return;
+                }
+
+                const liste = getBekleyenYazilar();
+                // Yazar SADECE kendi reddedilmiş yazısını tekrar gönderebilir.
+                const kayit = liste.find(b =>
+                    b.id === d.id &&
+                    (b.authorName || '').toLocaleUpperCase('tr') === yazar.name.toLocaleUpperCase('tr') &&
+                    b.status === 'rejected'
+                );
+
+                if (!kayit) {
+                    res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: false, message: 'Reddedilmiş yazı bulunamadı. Sayfayı yenileyip tekrar deneyin.' }));
+                    return;
+                }
+
+                if (!Array.isArray(kayit.gecmis)) kayit.gecmis = [];
+                kayit.gecmis.push({
+                    durum: 'rejected',
+                    tarih: kayit.kararTarihi,
+                    kararVeren: kayit.kararVeren,
+                    redSebebi: kayit.redSebebi || '',
+                    eskiBaslik: kayit.title
+                });
+
+                kayit.title = baslik;
+                kayit.content = icerik;
+                kayit.status = 'pending';
+                kayit.submittedAt = new Date().toISOString();
+                kayit.revizyon = (kayit.revizyon || 1) + 1;
+                delete kayit.kararTarihi;
+                delete kayit.kararVeren;
+                delete kayit.redSebebi;
+
+                saveBekleyenYazilar(liste);
+
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({
+                    success: true,
+                    message: 'Düzeltilmiş yazınız yeniden yönetici onayına gönderildi.',
+                    id: kayit.id
                 }));
             } catch (e) {
                 res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -477,7 +611,11 @@ const server = http.createServer((req, res) => {
                 }
 
                 const bekleyenler = getBekleyenYazilar();
-                const itemIndex = bekleyenler.findIndex(b => b.id === id);
+                /* Yalnızca HÂLÂ BEKLEYEN kayıt işlenebilir. Karar verilmiş kayıtlar
+                   artık listede kaldığı için (geçmiş görünsün diye) bu filtre
+                   olmazsa aynı yazı ikinci kez onaylanıp kitapçığa iki kez
+                   eklenebilirdi. */
+                const itemIndex = bekleyenler.findIndex(b => b.id === id && (b.status || 'pending') === 'pending');
 
                 if (itemIndex === -1) {
                     res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -488,11 +626,16 @@ const server = http.createServer((req, res) => {
                 const targetItem = bekleyenler[itemIndex];
 
                 if (action === 'reject') {
-                    bekleyenler.splice(itemIndex, 1);
+                    /* Reddedilen yazı SİLİNMİYOR — yazar durumunu görebilsin ve
+                       düzeltip tekrar gönderebilsin diye kayıt korunuyor. */
+                    targetItem.status = 'rejected';
+                    targetItem.kararTarihi = new Date().toISOString();
+                    targetItem.kararVeren = (username || '').trim();
+                    targetItem.redSebebi = ((data.redSebebi || '') + '').trim();
                     saveBekleyenYazilar(bekleyenler);
 
                     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-                    res.end(JSON.stringify({ success: true, message: `"${targetItem.title}" başlıklı yazı reddedildi ve listeden kaldırıldı.` }));
+                    res.end(JSON.stringify({ success: true, message: `"${targetItem.title}" başlıklı yazı reddedildi. Yazar durumu görüp düzeltilmiş hâlini tekrar gönderebilir.` }));
                     return;
                 }
 
@@ -536,7 +679,12 @@ const server = http.createServer((req, res) => {
 
                     fs.writeFileSync(dbPath, JSON.stringify(db, null, 2), 'utf8');
 
-                    bekleyenler.splice(itemIndex, 1);
+                    /* Onaylanan yazı da SİLİNMİYOR — yönetici panelinde "kim,
+                       neyi, ne zaman onayladı" geçmişi görünsün diye kayıt
+                       durumu işaretlenerek korunuyor. */
+                    targetItem.status = 'approved';
+                    targetItem.kararTarihi = new Date().toISOString();
+                    targetItem.kararVeren = (username || '').trim();
                     saveBekleyenYazilar(bekleyenler);
 
                     /* SIRA ÖNEMLİ: generate_pdf_kit.js önce çalışmalı — kitapçık

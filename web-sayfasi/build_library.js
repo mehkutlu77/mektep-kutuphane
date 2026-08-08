@@ -1860,34 +1860,39 @@ function createAdminHTML(authors) {
 
                 if (data.success && data.pendingArticles) {
                     const list = data.pendingArticles;
+                    window.PENDING_ITEMS_CACHE = list;
+
+                    /* Kayıtlar artık karar sonrası SİLİNMİYOR; durumlarına göre
+                       ikiye ayrılıyor: üstte işlem bekleyenler, altta "kim neyi
+                       ne zaman onayladı/reddetti" geçmişi. */
+                    const bekleyenler = list.filter(x => (x.status || 'pending') === 'pending');
+                    const gecmis = list
+                        .filter(x => x.status === 'approved' || x.status === 'rejected')
+                        .sort((a, b) => new Date(b.kararTarihi || 0) - new Date(a.kararTarihi || 0));
+
+                    // Rozet YALNIZCA işlem bekleyenleri sayar.
                     const badge = document.getElementById('pending-badge');
                     if (badge) {
-                        if (list.length > 0) {
-                            badge.textContent = list.length;
+                        if (bekleyenler.length > 0) {
+                            badge.textContent = bekleyenler.length;
                             badge.style.display = 'inline-block';
                         } else {
                             badge.style.display = 'none';
                         }
                     }
 
-                    if (list.length === 0) {
-                        container.innerHTML = \`
-                            <div style="text-align:center; padding:40px 20px; background:#18181c; border-radius:10px; border:1px solid #2d2d38; color:#9ca3af;">
-                                <div style="font-size:2rem; margin-bottom:8px;">✅</div>
-                                <div>Şu anda onay bekleyen yeni bir yazar yazısı bulunmuyor.</div>
-                            </div>
-                        \`;
-                        return;
-                    }
-
-                    window.PENDING_ITEMS_CACHE = list;
-
-                    container.innerHTML = list.map(item => \`
+                    const bekleyenHtml = bekleyenler.length === 0
+                        ? \`<div style="text-align:center; padding:32px 20px; background:#18181c; border-radius:10px; border:1px solid #2d2d38; color:#9ca3af;">
+                               <div style="font-size:2rem; margin-bottom:8px;">✅</div>
+                               <div>Şu anda onay bekleyen yeni bir yazar yazısı bulunmuyor.</div>
+                           </div>\`
+                        : bekleyenler.map(item => \`
                         <div style="background:#18181c; border:1px solid #2d2d38; border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:10px;">
                             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                                 <div>
                                     <span style="font-size:0.8rem; background:#3b82f6; color:#fff; padding:2px 8px; border-radius:4px; font-weight:600;">✍️ \${item.authorName}</span>
                                     <span style="font-size:0.78rem; color:#8a8a9e; margin-left:8px;">📅 \${new Date(item.submittedAt).toLocaleString('tr-TR')}</span>
+                                    \${(item.revizyon || 1) > 1 ? \`<span style="font-size:0.72rem; background:#f59e0b; color:#111; padding:2px 7px; border-radius:4px; font-weight:700; margin-left:6px;">🔁 \${item.revizyon}. gönderim</span>\` : ''}
                                 </div>
                             </div>
                             <div style="font-size:1.05rem; font-weight:700; color:#f3f4f6;">\${item.title}</div>
@@ -1901,6 +1906,33 @@ function createAdminHTML(authors) {
                             </div>
                         </div>
                     \`).join('');
+
+                    const gecmisHtml = gecmis.length === 0 ? '' : \`
+                        <div style="margin-top:22px; border-top:1px solid #2d2d38; padding-top:16px;">
+                            <div style="font-size:0.92rem; font-weight:700; color:#e5e7eb; margin-bottom:10px;">
+                                🗂️ İşlem Geçmişi <span style="color:#8a8a9e; font-weight:500;">(\${gecmis.length} kayıt)</span>
+                            </div>
+                            \${gecmis.map(item => {
+                                const onayli = item.status === 'approved';
+                                const renk = onayli ? '#10b981' : '#ef4444';
+                                const etiket = onayli ? '✅ Onaylandı' : '❌ Reddedildi';
+                                return \`
+                                <div style="background:#141418; border:1px solid #26262f; border-left:3px solid \${renk}; border-radius:8px; padding:11px 14px; margin-bottom:8px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                                        <div style="font-size:0.92rem; font-weight:600; color:#e5e7eb;">\${item.title}</div>
+                                        <span style="font-size:0.75rem; color:\${renk}; font-weight:700;">\${etiket}</span>
+                                    </div>
+                                    <div style="font-size:0.76rem; color:#8a8a9e; margin-top:5px;">
+                                        ✍️ \${item.authorName}
+                                        &nbsp;•&nbsp; 👤 \${item.kararVeren || '—'}
+                                        &nbsp;•&nbsp; 📅 \${item.kararTarihi ? new Date(item.kararTarihi).toLocaleString('tr-TR') : '—'}
+                                    </div>
+                                    \${item.redSebebi ? \`<div style="font-size:0.78rem; color:#fca5a5; margin-top:6px;">Gerekçe: \${item.redSebebi}</div>\` : ''}
+                                </div>\`;
+                            }).join('')}
+                        </div>\`;
+
+                    container.innerHTML = bekleyenHtml + gecmisHtml;
                 } else {
                     container.innerHTML = '<div style="color:#ef4444; text-align:center; padding:20px;">' + (data.message || 'Veriler çekilemedi.') + '</div>';
                 }
@@ -1924,8 +1956,17 @@ function createAdminHTML(authors) {
         }
 
         async function processPendingArticle(id, action) {
-            const actionText = action === 'approve' ? 'onaylayıp kütüphanede yayınlamak' : 'reddedip silmek';
-            if (!confirm(\`Bu yazıyı \${actionText} istediğinizden emin misiniz?\`)) return;
+            /* Reddederken gerekçe İSTENİR: yazar bu gerekçeyi kendi ekranında
+               görüp yazıyı düzeltip tekrar gönderebiliyor. Gerekçesiz red,
+               yazarın neyi düzelteceğini bilememesi demek. */
+            let redSebebi = '';
+            if (action === 'reject') {
+                const girilen = prompt('Bu yazı neden reddediliyor?\\n\\nYazacağınız gerekçe yazara gösterilecek ve düzeltip tekrar gönderebilecek.\\n(Boş bırakabilirsiniz)');
+                if (girilen === null) return; // vazgeçildi
+                redSebebi = girilen.trim();
+            } else {
+                if (!confirm('Bu yazıyı onaylayıp kütüphanede yayınlamak istediğinizden emin misiniz?')) return;
+            }
 
             const box = document.getElementById('pending-durum-box');
             box.style.background = 'rgba(59,130,246,0.15)';
@@ -1944,7 +1985,8 @@ function createAdminHTML(authors) {
                         username: u,
                         password: p,
                         id: id,
-                        action: action
+                        action: action,
+                        redSebebi: redSebebi
                     })
                 });
 

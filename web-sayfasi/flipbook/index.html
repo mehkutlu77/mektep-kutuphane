@@ -266,6 +266,12 @@ body.gece-modu .toc-kapat {
   <button onclick="yeniYaziEkleModalAc()" style="width:100%;background:#10b981;color:#fff;border:none;padding:11px;border-radius:6px;font-weight:700;margin-bottom:10px;cursor:pointer;font-size:0.88rem;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 8px rgba(16,185,129,0.25);">✍️ Yeni Yazı Ekle & Onaya Gönder</button>
   <button onclick="tumKitapligiBelgeOlarakDuzenle()" style="width:100%;background:#4f46e5;color:#fff;border:none;padding:10px;border-radius:6px;font-weight:600;margin-bottom:10px;cursor:pointer;font-size:0.85rem;">📝 Tüm Kitapçığı Tek Belge Olarak Düzenle</button>
   <button onclick="hesapBilgilerimiGuncelle()" style="width:100%;background:#e2e8f0;color:#334155;border:none;padding:10px;border-radius:6px;font-weight:600;margin-bottom:14px;cursor:pointer;font-size:0.85rem;">🔐 Giriş Bilgilerimi (Kullanıcı Adı & Şifre) Değiştir</button>
+
+  <!-- Gönderilen yazıların onay durumu. gonderimDurumlariniYukle() doldurur. -->
+  <div id="gonderim-durum-bolumu" style="display:none;margin-bottom:14px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;padding:12px;">
+    <div style="font-size:0.85rem;font-weight:700;color:#334155;margin-bottom:8px;">📬 Gönderdiğim Yazıların Durumu</div>
+    <div id="gonderim-durum-liste" style="display:flex;flex-direction:column;gap:8px;max-height:230px;overflow-y:auto;"></div>
+  </div>
   <div id="duzen-liste" style="flex:1;overflow-y:auto;margin-bottom:20px;padding-right:5px;"></div>
   <div style="display:flex;gap:10px;">
     <button onclick="duzenlemeKaydet()" style="flex:1;background:#2ecc71;color:#fff;border:none;padding:12px;border-radius:6px;font-weight:600;cursor:pointer;transition:0.15s;">💾 Değişiklikleri Kaydet</button>
@@ -1068,8 +1074,107 @@ window.duzenlemeModunuAc = function() {
     return;
   }
   duzenlemeListesiniYaz();
+  gonderimDurumlariniYukle();
   $('duzen-panel').style.right = '0px';
 }
+
+/* ── GÖNDERİLEN YAZILARIN ONAY DURUMU ──────────────────────────────────────
+   Yazar, onaya gönderdiği yazının ne olduğunu göremiyordu: onaylandı mı,
+   reddedildi mi, hâlâ bekliyor mu belli değildi. Bu bölüm sunucudan yazarın
+   KENDİ gönderimlerini çekip durumlarını listeler. Reddedilenler için
+   "düzelt ve tekrar gönder" düğmesi çıkar. */
+window.GONDERIM_CACHE = [];
+
+async function gonderimDurumlariniYukle() {
+  const bolum = document.getElementById('gonderim-durum-bolumu');
+  const liste = document.getElementById('gonderim-durum-liste');
+  if (!bolum || !liste) return;
+
+  const usr = localStorage.getItem('username') || '';
+  const pwd = localStorage.getItem('password') || '';
+  const ad  = (guncelYazarVerisi && guncelYazarVerisi.name) || localStorage.getItem('authorRealName') || '';
+  if (!usr || !ad) return;
+
+  try {
+    const res = await fetch('/api/my-submissions?username=' + encodeURIComponent(usr)
+      + '&password=' + encodeURIComponent(pwd)
+      + '&authorName=' + encodeURIComponent(ad));
+    const data = await res.json();
+    if (!data.success || !Array.isArray(data.submissions) || data.submissions.length === 0) {
+      bolum.style.display = 'none';
+      return;
+    }
+
+    window.GONDERIM_CACHE = data.submissions;
+    bolum.style.display = 'block';
+
+    liste.innerHTML = data.submissions.map(s => {
+      const durum = s.status || 'pending';
+      const stil = durum === 'approved'
+        ? { renk: '#059669', zemin: '#ecfdf5', kenar: '#a7f3d0', etiket: '✅ Onaylandı' }
+        : durum === 'rejected'
+        ? { renk: '#dc2626', zemin: '#fef2f2', kenar: '#fecaca', etiket: '❌ Reddedildi' }
+        : { renk: '#b45309', zemin: '#fffbeb', kenar: '#fde68a', etiket: '⏳ Onay bekliyor' };
+
+      const tarih = s.kararTarihi || s.submittedAt;
+      const tarihMetni = tarih ? new Date(tarih).toLocaleString('tr-TR') : '';
+
+      return '<div style="background:' + stil.zemin + ';border:1px solid ' + stil.kenar + ';border-radius:6px;padding:9px 11px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">'
+        +   '<div style="font-size:0.82rem;font-weight:600;color:#1e293b;line-height:1.3;">' + kacisliMetin(s.title) + '</div>'
+        +   '<span style="font-size:0.7rem;font-weight:700;color:' + stil.renk + ';white-space:nowrap;">' + stil.etiket + '</span>'
+        + '</div>'
+        + '<div style="font-size:0.71rem;color:#64748b;margin-top:4px;">📅 ' + tarihMetni
+        +   ((s.revizyon || 1) > 1 ? ' &nbsp;•&nbsp; 🔁 ' + s.revizyon + '. gönderim' : '') + '</div>'
+        + (s.redSebebi
+            ? '<div style="font-size:0.73rem;color:#b91c1c;margin-top:5px;background:#fff;border-radius:4px;padding:5px 7px;">Gerekçe: ' + kacisliMetin(s.redSebebi) + '</div>'
+            : '')
+        + (durum === 'rejected'
+            ? '<button onclick="reddedileniDuzenle(\'' + s.id + '\')" style="margin-top:7px;width:100%;background:#f59e0b;color:#111;border:none;padding:7px;border-radius:5px;font-weight:700;cursor:pointer;font-size:0.76rem;">✏️ Düzelt ve Tekrar Gönder</button>'
+            : '')
+        + '</div>';
+    }).join('');
+  } catch (e) {
+    console.warn('Gönderim durumları alınamadı:', e);
+    bolum.style.display = 'none';
+  }
+}
+
+/* Başlık ve gerekçe kullanıcı metnidir; innerHTML'e konduğu için kaçışlanır. */
+function kacisliMetin(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+window.reddedileniDuzenle = function(id) {
+  const kayit = (window.GONDERIM_CACHE || []).find(s => s.id === id);
+  if (!kayit) return;
+
+  // Yeni yazı kutusunu reddedilen içerikle doldur, "tekrar gönderim" moduna al.
+  document.getElementById('yeni-yazi-baslik').value = kayit.title || '';
+  document.getElementById('yeni-yazi-icerik').value = kayit.content || '';
+
+  const durumBox = document.getElementById('yeni-yazi-durum-box');
+  if (durumBox) {
+    if (kayit.redSebebi) {
+      durumBox.style.background = '#fef2f2';
+      durumBox.style.color = '#991b1b';
+      durumBox.style.border = '1px solid #fecaca';
+      durumBox.textContent = 'Reddedilme gerekçesi: ' + kayit.redSebebi;
+      durumBox.style.display = 'block';
+    } else {
+      durumBox.style.display = 'none';
+    }
+  }
+
+  window.TEKRAR_GONDERIM_ID = id;
+  const btn = document.getElementById('btn-yeni-yazi-gonder');
+  if (btn) btn.textContent = '🔁 Düzeltilmiş Hâlini Tekrar Gönder';
+
+  const modal = document.getElementById('yeni-yazi-modal');
+  if (modal) modal.style.display = 'grid';
+};
 
 window.duzenlemeModunuKapat = function() {
   $('duzen-panel').style.right = '-450px';
@@ -1291,6 +1396,14 @@ window.yeniYaziEkleModalAc = function() {
   document.getElementById('yeni-yazi-icerik').value = '';
   const durumBox = document.getElementById('yeni-yazi-durum-box');
   if (durumBox) durumBox.style.display = 'none';
+
+  /* Aynı kutu "tekrar gönderim" için de kullanılıyor. Sıfırlanmazsa, önce
+     reddedilen bir yazıyı düzeltip sonra YENİ yazı eklemeye kalkan yazarın
+     yeni yazısı eski kaydın üzerine yazılırdı. */
+  window.TEKRAR_GONDERIM_ID = null;
+  const btn = document.getElementById('btn-yeni-yazi-gonder');
+  if (btn) btn.textContent = '💾 Kaydet ve Onaya Gönder';
+
   const modal = document.getElementById('yeni-yazi-modal');
   if (modal) modal.style.display = 'grid';
 };
@@ -1330,18 +1443,20 @@ window.yeniYaziKaydetVeOnayaGonder = async function() {
     btn.textContent = '⏳ Gönderiliyor...';
   }
 
+  /* İki mod: yeni gönderim veya reddedilen bir yazının düzeltilmiş hâli.
+     İkincisinde yeni kayıt açılmaz, mevcut kayıt güncellenip tekrar onaya
+     düşer — böylece yazar aynı yazıyı takip etmeye devam eder. */
+  const tekrarId = window.TEKRAR_GONDERIM_ID || null;
+  const adres = tekrarId ? '/api/author-resubmit-article' : '/api/author-submit-article';
+  const govde = tekrarId
+    ? { username, password, authorName, id: tekrarId, title: baslik, content: icerik }
+    : { role, username, password, authorName, title: baslik, content: icerik };
+
   try {
-    const res = await fetch('/api/author-submit-article', {
+    const res = await fetch(adres, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        role,
-        username,
-        password,
-        authorName,
-        title: baslik,
-        content: icerik
-      })
+      body: JSON.stringify(govde)
     });
 
     const data = await res.json();
@@ -1360,6 +1475,8 @@ window.yeniYaziKaydetVeOnayaGonder = async function() {
       } else {
         alert(data.message);
       }
+      window.TEKRAR_GONDERIM_ID = null;
+      gonderimDurumlariniYukle(); // durum listesi anında tazelensin
       setTimeout(() => {
         yeniYaziEkleModalKapat();
       }, 2500);
