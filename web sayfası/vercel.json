@@ -1,5 +1,6 @@
 {
   "buildCommand": "npm install",
   "devCommand": "node server.js",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "rootDirectory": "."
 }
