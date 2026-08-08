@@ -1,0 +1,21 @@
+# Node modules
+node_modules/
+
+# OS files
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# Yedek dosyalar
+*_yedek*.json
+*_backup*.json
+*.zip
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp

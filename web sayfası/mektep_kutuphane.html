@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mektep Yazar Kütüphanesi</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Dancing+Script:wght@600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0b0e14;
+            --text: #f5f6fa;
+            --accent: #ffc107;
+            --accent-glow: rgba(255, 193, 7, 0.4);
+            --primary: #4f46e5;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 0;
+            background: radial-gradient(circle at 50% 20%, #151a26 0%, #0a0c12 70%, #050608 100%);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+        }
+        header {
+            text-align: center;
+            padding: 50px 20px 40px;
+            background: linear-gradient(to bottom, rgba(15, 23, 42, 0.8), rgba(11, 14, 20, 0));
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            position: relative;
+        }
+        header h1 {
+            margin: 0;
+            font-family: 'Cinzel', serif;
+            font-size: 2.6rem;
+            font-weight: 700;
+            letter-spacing: 4px;
+            color: #fff;
+            text-shadow: 0 0 20px rgba(255,193,7,0.3);
+        }
+        /* Logolar ve çıkış butonu 2026-08-06'da satır içi stilden buraya taşındı —
+           satır içi stiller medya sorgusuyla ezilemediği için telefonda logolar
+           başlığın ÜZERİNE biniyor, çıkış butonu kart yazılarını kapatıyordu. */
+        .header-logo {
+            position: absolute;
+            top: 20px;
+            height: 84px;
+            width: auto;
+            border-radius: 50%;
+            box-shadow: 0 4px 18px rgba(0,0,0,0.5), 0 0 0 4px rgba(255,255,255,0.9);
+            background: #fff;
+        }
+        .header-logo-sol { left: 20px; }
+        .header-logo-sag { right: 20px; }
+        .cikis-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            margin-top: 0;
+            padding: 8px 16px;
+            font-size: 0.8rem;
+            z-index: 50;
+        }
+        header .subtitle-cursive {
+            font-family: 'Dancing Script', cursive;
+            font-size: 1.8rem;
+            color: var(--accent);
+            margin-top: 4px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        .header-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--text);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 10px 22px;
+            border-radius: 30px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-top: 20px;
+            backdrop-filter: blur(10px);
+        }
+        .header-btn:hover {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+        
+        .arac-cubugu {
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 30px 20px 0;
+        }
+        .arac-cubugu input, .arac-cubugu select {
+            background: rgba(22, 27, 38, 0.8);
+            color: var(--text);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 12px;
+            padding: 12px 18px;
+            font-size: 0.95rem;
+            outline: none;
+            backdrop-filter: blur(8px);
+            transition: 0.2s;
+        }
+        .arac-cubugu input { width: min(340px, 75vw); }
+        .arac-cubugu input:focus { border-color: var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
+        .sonuc-yok {
+            text-align: center;
+            color: #a4b0be;
+            padding: 40px;
+            display: none;
+        }
+        .library-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 45px 35px;
+            padding: 50px 40px 80px;
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+        .author-card {
+            cursor: pointer;
+            perspective: 1200px;
+            position: relative;
+            /* Kapak genişliği: "Yeni sekmede" düğmesi KARTIN değil KAPAĞIN sağ
+               üst köşesine hizalanır (kart, ızgara gözü kadar geniş olduğu için
+               düğme kapağın dışına taşardı). Kapak ölçüsü kırılma noktalarında
+               değiştiği için değişkenle taşınıyor — .book-cover width'i
+               değişirse bu da güncellenmeli. */
+            --kapak-g: 200px;
+        }
+        /* "Yeni sekmede aç" — kapağın üzerine gelince beliren küçük düğme.
+           .book-cover'ın İÇİNDE değil, kartın içinde konumlandırılır: kapak
+           hover'da rotateY ile dönüyor ve overflow:hidden ile kırpıyor, düğme
+           orada olsaydı onunla birlikte eğilip kenardan kesilirdi.
+           Gerçek bir <a target="_blank"> olduğu için tarayıcının kendi
+           "bağlantıyı yeni sekmede aç", orta tık ve Ctrl+tık davranışları da
+           çalışır. */
+        .yeni-sekme-btn {
+            position: absolute;
+            top: 8px;
+            right: calc(50% - var(--kapak-g) / 2 + 8px);
+            z-index: 20;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 6px 10px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            color: #ffe9a8;
+            text-decoration: none;
+            white-space: nowrap;
+            background: rgba(12, 20, 38, 0.88);
+            border: 1px solid rgba(255, 193, 7, 0.55);
+            border-radius: 999px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.55);
+            opacity: 0;
+            transform: translateY(-4px);
+            pointer-events: none;
+            transition: opacity 0.22s ease, transform 0.22s ease, background 0.2s ease;
+        }
+        .author-card:hover .yeni-sekme-btn,
+        .yeni-sekme-btn:focus-visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+        .yeni-sekme-btn:hover {
+            background: rgba(255, 193, 7, 0.92);
+            color: #1a1408;
+            border-color: rgba(255, 193, 7, 0.9);
+        }
+        /* Dokunmatik cihazda hover yok — düğme kalıcı görünür, yoksa telefonda
+           hiç erişilemezdi. Ama tam etiketiyle (114 px) 145 px'lik kapağın
+           neredeyse tamamını örtüyordu; bu yüzden yazı gizlenip sadece ok
+           simgesi kalıyor, küçük yuvarlak bir düğmeye dönüşüyor. */
+        @media (hover: none) {
+            .yeni-sekme-btn {
+                opacity: 1;
+                transform: none;
+                pointer-events: auto;
+                font-size: 0.8rem;
+                padding: 0;
+                width: 26px;
+                height: 26px;
+                justify-content: center;
+            }
+            .yeni-sekme-yazi { display: none; }
+        }
+        .author-card.yakinda { cursor: default; }
+        .author-card.yakinda .book-cover {
+            opacity: 0.45;
+            filter: grayscale(0.7);
+        }
+        .author-card.yakinda:hover .book-cover {
+            transform: none;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        /* Premium Modern Book Cover Design */
+        .book-cover {
+            position: relative;
+            width: 200px;
+            height: 310px;
+            margin: 0 auto;
+            border-radius: 4px 10px 10px 4px;
+            transform-style: preserve-3d;
+            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.4s ease;
+            box-shadow: -8px 12px 30px rgba(0, 0, 0, 0.7),
+                        inset 2px 0 3px rgba(255, 255, 255, 0.15),
+                        inset -1px 0 2px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background-image: url('kapak.png');
+            background-size: cover;
+            background-position: center;
+        }
+        /* 3D Spine Effect */
+        .book-spine {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 14px;
+            background: linear-gradient(to right, rgba(0,0,0,0.6), rgba(255,255,255,0.1) 50%, rgba(0,0,0,0.4));
+            z-index: 10;
+            border-right: 1px solid rgba(255,255,255,0.1);
+        }
+        .author-card:hover .book-cover {
+            transform: rotateY(-18deg) translateY(-8px) scale(1.03);
+            box-shadow: -15px 20px 40px rgba(0, 0, 0, 0.8),
+                        0 0 25px rgba(255, 193, 7, 0.25);
+        }
+        /* 2026-08-06 kalibrasyonu: kapak.png'deki (1131x1600) iki süsleme
+           çizgisinin arası — üst çizgi %55.6, alt çizgi %64.66, yani bandın
+           yüksekliği %9.07. Sabit bir "top" değeri yerine BANDIN KENDİSİ
+           konumlandırılıp içerik flex ile dikey ortalanıyor; böylece yazar adı
+           tek satır da olsa iki satıra sarsa da (uzun unvanlı isimler)
+           boşluğun tam ortasında kalıyor, çizgilere yaslanmıyor. */
+        .cover-author-overlay {
+            position: absolute;
+            top: 55.6%;
+            height: 9.07%;
+            left: 10px;
+            right: 10px;
+            z-index: 5;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .cover-author-name {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.58rem;
+            font-weight: 700;
+            color: #1c3050;
+            margin: 0;
+            letter-spacing: 0.3px;
+            line-height: 1.1;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .kitap-etiketi {
+            text-align: center;
+            margin-top: 10px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 0.5px;
+        }
+        .kitap-tik {
+            color: #2ecc71;
+            font-weight: 900;
+        }
+        .premium-badge {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 1.5px solid var(--accent);
+            border-radius: 8px;
+            padding: 5px 12px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            margin-top: 12px;
+        }
+        
+        /* ── Telefon düzeni (2026-08-06'da elden geçirildi) ──
+           Önceki hâlde sadece kart ızgarası küçültülüyordu; başlık, logolar ve
+           çıkış butonu masaüstü ölçüleriyle kalıyordu. Sonuç: 375 px'lik ekranda
+           "MEKTEP KÜTÜPHANESİ" başlığı kendi kutusundan 30 px taşıyor (sayfa
+           385 px genişliyor → yatay kayma), iki logo başlığın üzerine biniyor,
+           çıkış butonu alt sıradaki kartların yazılarını kapatıyordu. */
+        @media (max-width: 600px) {
+            .library-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 25px 15px;
+                padding: 25px 15px;
+            }
+            .book-cover {
+                width: 155px;
+                height: 245px;
+            }
+            .author-card { --kapak-g: 155px; }
+            /* Kart küçüldüğü için kapak üzerindeki yazı da oranlı küçülür
+               (155/200 = 0.775) — aksi halde yazı kapağa göre şişkin kalıyor. */
+            .cover-author-name { font-size: 0.45rem; }
+
+            /* Kullanıcı isteği (2026-08-06): telefonda iki köşe logosu
+               KALDIRILIYOR. 375px'lik ekranda iki adet 84px'lik logo,
+               başlığa kalan genişliğin yarısını yiyor ve başlığın üzerine
+               biniyordu. Masaüstünde simetrik yerleşim korunuyor. */
+            .header-logo { display: none; }
+            header { padding: 26px 14px 28px; }
+            header h1 {
+                font-size: 1.7rem;
+                letter-spacing: 2px;
+                line-height: 1.25;
+                overflow-wrap: break-word;
+            }
+            header .subtitle-cursive { font-size: 1.2rem; }
+            .cikis-btn {
+                bottom: 12px;
+                right: 12px;
+                padding: 7px 12px;
+                font-size: 0.72rem;
+            }
+        }
+
+        /* Çok dar telefonlar (iPhone SE vb.) */
+        @media (max-width: 380px) {
+            header h1 { font-size: 1.45rem; letter-spacing: 1.5px; }
+            .library-grid { gap: 20px 10px; padding: 20px 10px; }
+            .book-cover { width: 145px; height: 229px; }
+            .author-card { --kapak-g: 145px; }
+        }
+
+        /* ── Çok Kitaplı Yazar Penceresi ── */
+        .yazar-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 300;
+            align-items: center;
+            justify-content: center;
+            padding: 30px 20px;
+        }
+        .yazar-modal.acik { display: flex; }
+        .yazar-modal-arka {
+            position: absolute;
+            inset: 0;
+            background: rgba(5, 6, 10, 0.82);
+            backdrop-filter: blur(4px);
+        }
+        .yazar-modal-icerik {
+            position: relative;
+            background: #12151f;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 18px;
+            padding: 40px 30px 30px;
+            max-width: 900px;
+            width: 100%;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+        }
+        .yazar-modal-kapat {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.06);
+            color: var(--text);
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        .yazar-modal-kapat:hover { background: var(--accent); color: #000; }
+        .yazar-modal-baslik {
+            text-align: center;
+            font-family: 'Cinzel', serif;
+            font-size: 1.4rem;
+            color: #fff;
+            margin: 0 0 30px;
+            letter-spacing: 1px;
+        }
+        .yazar-modal-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 35px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <!-- 2026-08-06: Sol/sağ üst köşedeki iki kırmızı daire ÖZKURBİR logosu
+             kullanıcı isteğiyle KALDIRILDI (giriş sayfasında da kaldırılmıştı,
+             artık iki sayfa tutarlı). Kurum kimliği kitap kapağında ve künye
+             sayfasında zaten var. Geri istenirse:
+             <img src="a-logo.png" alt="ÖZKURBİR" class="header-logo header-logo-sol">
+             <img src="a-logo.png" alt="ÖZKURBİR" class="header-logo header-logo-sag"> -->
+        <button onclick="cikisYap()" class="header-btn cikis-btn">🚪 Çıkış Yap</button>
+        <h1>MEKTEP KÜTÜPHANESİ</h1>
+        <div class="subtitle-cursive">Sonsuzluk İçinde Seçme Yazarlar</div>
+        <div style="display:flex; justify-content:center; gap:12px; margin-top:10px;">
+            <a href="mektep_yonetim.html" id="yonetim-butonu" class="header-btn">⚙️ Yönetici Paneli & İstatistikler</a>
+        </div>
+        <div id="hosgeldiniz-mesaj" style="margin-top: 15px; font-size: 0.9rem; color: #a4b0be; font-weight: 500;"></div>
+    </header>
+
+    <div class="arac-cubugu">
+        <input id="ara" type="search" placeholder="🔍 Yazar ara..." oninput="suzVeSirala()">
+        <select id="sirala" onchange="suzVeSirala()">
+            <option value="yazi">Yazı sayısına göre</option>
+            <option value="ad">Ada göre (A→Z)</option>
+        </select>
+    </div>
+    <p class="sonuc-yok" id="sonuc-yok">Aramanla eşleşen yazar bulunamadı.</p>
+
+    <div class="library-grid" id="izgara">
+        
+        <div class="author-card" onclick="yazarKitaplariniAc('ym_HACER_ELBEY')" data-name="HACER ELBEY" data-count="65" data-modal="ym_HACER_ELBEY">
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">HACER ELBEY</h3>
+                </div>
+            </div>
+            <div class="kitap-etiketi">1 Kitap Tamamlandı</div>
+        </div>
+        <div class="author-card" onclick="yazarKitaplariniAc('ym_HAM__KO_')" data-name="HAMİ KOÇ" data-count="44" data-modal="ym_HAM__KO_">
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">HAMİ KOÇ</h3>
+                </div>
+            </div>
+            <div class="kitap-etiketi">1 Kitap Tamamlandı</div>
+        </div>
+        <div class="author-card" onclick="openFlipbook('NAC__BEKTA_', this.dataset.name)" data-name="NACİ BEKTAŞ" data-count="31">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=NAC__BEKTA_&amp;ad=NAC%C4%B0%20BEKTA%C5%9E" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="NACİ BEKTAŞ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">NACİ BEKTAŞ</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('SEBAHATT_N_KAZAZ', this.dataset.name)" data-name="SEBAHATTİN KAZAZ" data-count="23">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=SEBAHATT_N_KAZAZ&amp;ad=SEBAHATT%C4%B0N%20KAZAZ" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="SEBAHATTİN KAZAZ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">SEBAHATTİN KAZAZ</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('ADEM_KEVEN', this.dataset.name)" data-name="ADEM KEVEN" data-count="21">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=ADEM_KEVEN&amp;ad=ADEM%20KEVEN" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="ADEM KEVEN — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">ADEM KEVEN</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('DANYAL_S_ZG_N', this.dataset.name)" data-name="DANYAL SÜZGÜN" data-count="17">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=DANYAL_S_ZG_N&amp;ad=DANYAL%20S%C3%9CZG%C3%9CN" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="DANYAL SÜZGÜN — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">DANYAL SÜZGÜN</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('EM_N_KEVEN', this.dataset.name)" data-name="EMİN KEVEN" data-count="16">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=EM_N_KEVEN&amp;ad=EM%C4%B0N%20KEVEN" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="EMİN KEVEN — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">EMİN KEVEN</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('_MER_FARUK_KONCA', this.dataset.name)" data-name="ÖMER FARUK KONCA" data-count="15">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=_MER_FARUK_KONCA&amp;ad=%C3%96MER%20FARUK%20KONCA" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="ÖMER FARUK KONCA — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">ÖMER FARUK KONCA</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('AL__DAYIO_LU', this.dataset.name)" data-name="ALİ DAYIOĞLU" data-count="14">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=AL__DAYIO_LU&amp;ad=AL%C4%B0%20DAYIO%C4%9ELU" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="ALİ DAYIOĞLU — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">ALİ DAYIOĞLU</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('DO___DR__ERDAL_KILI_', this.dataset.name)" data-name="DOÇ. DR. ERDAL KILIÇ" data-count="14">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=DO___DR__ERDAL_KILI_&amp;ad=DO%C3%87.%20DR.%20ERDAL%20KILI%C3%87" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="DOÇ. DR. ERDAL KILIÇ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">DOÇ. DR. ERDAL KILIÇ</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('SAL_H_UYAN', this.dataset.name)" data-name="SALİH UYAN" data-count="13">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=SAL_H_UYAN&amp;ad=SAL%C4%B0H%20UYAN" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="SALİH UYAN — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">SALİH UYAN</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('YUNUS_EMRE_GED_KL_', this.dataset.name)" data-name="YUNUS EMRE GEDİKLİ" data-count="13">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=YUNUS_EMRE_GED_KL_&amp;ad=YUNUS%20EMRE%20GED%C4%B0KL%C4%B0" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="YUNUS EMRE GEDİKLİ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">YUNUS EMRE GEDİKLİ</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('MUSTAFA_ALTINSOY', this.dataset.name)" data-name="MUSTAFA ALTINSOY" data-count="12">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=MUSTAFA_ALTINSOY&amp;ad=MUSTAFA%20ALTINSOY" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="MUSTAFA ALTINSOY — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">MUSTAFA ALTINSOY</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('HAL_L__Z', this.dataset.name)" data-name="HALİL ÖZ" data-count="12">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=HAL_L__Z&amp;ad=HAL%C4%B0L%20%C3%96Z" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="HALİL ÖZ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">HALİL ÖZ</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('RAMAZAN_AKSOY', this.dataset.name)" data-name="RAMAZAN AKSOY" data-count="11">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=RAMAZAN_AKSOY&amp;ad=RAMAZAN%20AKSOY" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="RAMAZAN AKSOY — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">RAMAZAN AKSOY</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('B_LG_N_PEL_STER', this.dataset.name)" data-name="BİLGİN PELİSTER" data-count="10">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=B_LG_N_PEL_STER&amp;ad=B%C4%B0LG%C4%B0N%20PEL%C4%B0STER" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="BİLGİN PELİSTER — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">BİLGİN PELİSTER</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('MEHMET_YILDIRTAN', this.dataset.name)" data-name="MEHMET YILDIRTAN" data-count="9">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=MEHMET_YILDIRTAN&amp;ad=MEHMET%20YILDIRTAN" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="MEHMET YILDIRTAN — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">MEHMET YILDIRTAN</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('ESRA_TUN__SAMSA', this.dataset.name)" data-name="ESRA TUNÇ SAMSA" data-count="8">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=ESRA_TUN__SAMSA&amp;ad=ESRA%20TUN%C3%87%20SAMSA" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="ESRA TUNÇ SAMSA — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">ESRA TUNÇ SAMSA</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('AL__SEDAT_ASLAN', this.dataset.name)" data-name="ALİ SEDAT ASLAN" data-count="8">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=AL__SEDAT_ASLAN&amp;ad=AL%C4%B0%20SEDAT%20ASLAN" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="ALİ SEDAT ASLAN — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">ALİ SEDAT ASLAN</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('AZM__AKSOY', this.dataset.name)" data-name="AZMİ AKSOY" data-count="8">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=AZM__AKSOY&amp;ad=AZM%C4%B0%20AKSOY" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="AZMİ AKSOY — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">AZMİ AKSOY</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('RIDVAN_AKLAN', this.dataset.name)" data-name="RIDVAN AKLAN" data-count="7">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=RIDVAN_AKLAN&amp;ad=RIDVAN%20AKLAN" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="RIDVAN AKLAN — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">RIDVAN AKLAN</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('DR___SMA_L_G_LER', this.dataset.name)" data-name="DR. İSMAİL GÜLER" data-count="6">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=DR___SMA_L_G_LER&amp;ad=DR.%20%C4%B0SMA%C4%B0L%20G%C3%9CLER" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="DR. İSMAİL GÜLER — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">DR. İSMAİL GÜLER</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('MEHMET_CO_AR', this.dataset.name)" data-name="MEHMET COŞAR" data-count="6">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=MEHMET_CO_AR&amp;ad=MEHMET%20CO%C5%9EAR" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="MEHMET COŞAR — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">MEHMET COŞAR</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('DR__BELMA_UYSAL', this.dataset.name)" data-name="DR. BELMA UYSAL" data-count="6">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=DR__BELMA_UYSAL&amp;ad=DR.%20BELMA%20UYSAL" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="DR. BELMA UYSAL — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">DR. BELMA UYSAL</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('KAD_R__NAL', this.dataset.name)" data-name="KADİR ÜNAL" data-count="5">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=KAD_R__NAL&amp;ad=KAD%C4%B0R%20%C3%9CNAL" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="KADİR ÜNAL — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">KADİR ÜNAL</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('PROF__DR__OSMAN_KEMAL_KAYRA', this.dataset.name)" data-name="PROF. DR. OSMAN KEMAL KAYRA" data-count="5">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=PROF__DR__OSMAN_KEMAL_KAYRA&amp;ad=PROF.%20DR.%20OSMAN%20KEMAL%20KAYRA" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="PROF. DR. OSMAN KEMAL KAYRA — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">PROF. DR. OSMAN KEMAL KAYRA</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('MUSTAFA_USLU', this.dataset.name)" data-name="MUSTAFA USLU" data-count="5">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=MUSTAFA_USLU&amp;ad=MUSTAFA%20USLU" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="MUSTAFA USLU — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">MUSTAFA USLU</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('FAT_H___G_REN', this.dataset.name)" data-name="FATİH İŞGÖREN" data-count="4">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=FAT_H___G_REN&amp;ad=FAT%C4%B0H%20%C4%B0%C5%9EG%C3%96REN" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="FATİH İŞGÖREN — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">FATİH İŞGÖREN</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('ENES_OKUTAN', this.dataset.name)" data-name="ENES OKUTAN" data-count="4">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=ENES_OKUTAN&amp;ad=ENES%20OKUTAN" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="ENES OKUTAN — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">ENES OKUTAN</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('NE_AT_YAYLA', this.dataset.name)" data-name="NEŞAT YAYLA" data-count="4">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=NE_AT_YAYLA&amp;ad=NE%C5%9EAT%20YAYLA" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="NEŞAT YAYLA — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">NEŞAT YAYLA</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('TA_KIN_KO_AK', this.dataset.name)" data-name="TAŞKIN KOÇAK" data-count="4">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=TA_KIN_KO_AK&amp;ad=TA%C5%9EKIN%20KO%C3%87AK" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="TAŞKIN KOÇAK — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">TAŞKIN KOÇAK</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('ERDEM_KILI_', this.dataset.name)" data-name="ERDEM KILIÇ" data-count="3">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=ERDEM_KILI_&amp;ad=ERDEM%20KILI%C3%87" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="ERDEM KILIÇ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">ERDEM KILIÇ</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('MUTTAL_P_HASDEM_R', this.dataset.name)" data-name="MUTTALİP HASDEMİR" data-count="3">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=MUTTAL_P_HASDEM_R&amp;ad=MUTTAL%C4%B0P%20HASDEM%C4%B0R" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="MUTTALİP HASDEMİR — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">MUTTALİP HASDEMİR</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('RAS_M_KARAG_L', this.dataset.name)" data-name="RASİM KARAGÜL" data-count="3">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=RAS_M_KARAG_L&amp;ad=RAS%C4%B0M%20KARAG%C3%9CL" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="RASİM KARAGÜL — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">RASİM KARAGÜL</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('_EYHAL__TU_', this.dataset.name)" data-name="ŞEYHALİ TUĞ" data-count="3">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=_EYHAL__TU_&amp;ad=%C5%9EEYHAL%C4%B0%20TU%C4%9E" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="ŞEYHALİ TUĞ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">ŞEYHALİ TUĞ</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('ASUMAN_SARITA_', this.dataset.name)" data-name="ASUMAN SARITAÇ" data-count="3">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=ASUMAN_SARITA_&amp;ad=ASUMAN%20SARITA%C3%87" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="ASUMAN SARITAÇ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">ASUMAN SARITAÇ</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('KEMAL_TUN_', this.dataset.name)" data-name="KEMAL TUNÇ" data-count="3">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=KEMAL_TUN_&amp;ad=KEMAL%20TUN%C3%87" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="KEMAL TUNÇ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">KEMAL TUNÇ</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('MUSTAFA_CANITEZ', this.dataset.name)" data-name="MUSTAFA CANITEZ" data-count="3">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=MUSTAFA_CANITEZ&amp;ad=MUSTAFA%20CANITEZ" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="MUSTAFA CANITEZ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">MUSTAFA CANITEZ</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('AHMET_T_RKBEN', this.dataset.name)" data-name="AHMET TÜRKBEN" data-count="3">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=AHMET_T_RKBEN&amp;ad=AHMET%20T%C3%9CRKBEN" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="AHMET TÜRKBEN — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">AHMET TÜRKBEN</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('FUAT_BOL', this.dataset.name)" data-name="FUAT BOL" data-count="3">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=FUAT_BOL&amp;ad=FUAT%20BOL" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="FUAT BOL — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">FUAT BOL</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('MUSTAFA_BA_AR', this.dataset.name)" data-name="MUSTAFA BAŞAR" data-count="3">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=MUSTAFA_BA_AR&amp;ad=MUSTAFA%20BA%C5%9EAR" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="MUSTAFA BAŞAR — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">MUSTAFA BAŞAR</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('MEHMET_KUTLU', this.dataset.name)" data-name="MEHMET KUTLU" data-count="2">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=MEHMET_KUTLU&amp;ad=MEHMET%20KUTLU" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="MEHMET KUTLU — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">MEHMET KUTLU</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('ONUR__ZEL_A_LAYAN', this.dataset.name)" data-name="ONUR ÖZELÇAĞLAYAN" data-count="2">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=ONUR__ZEL_A_LAYAN&amp;ad=ONUR%20%C3%96ZEL%C3%87A%C4%9ELAYAN" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="ONUR ÖZELÇAĞLAYAN — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">ONUR ÖZELÇAĞLAYAN</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('PROF__DR__ERD_N__D_NDAR', this.dataset.name)" data-name="PROF. DR. ERDİNÇ DÜNDAR" data-count="2">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=PROF__DR__ERD_N__D_NDAR&amp;ad=PROF.%20DR.%20ERD%C4%B0N%C3%87%20D%C3%9CNDAR" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="PROF. DR. ERDİNÇ DÜNDAR — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">PROF. DR. ERDİNÇ DÜNDAR</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('RAUF_EN_', this.dataset.name)" data-name="RAUF ENÇ" data-count="2">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=RAUF_EN_&amp;ad=RAUF%20EN%C3%87" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="RAUF ENÇ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">RAUF ENÇ</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('YUSUF_DURSUN', this.dataset.name)" data-name="YUSUF DURSUN" data-count="2">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=YUSUF_DURSUN&amp;ad=YUSUF%20DURSUN" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="YUSUF DURSUN — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">YUSUF DURSUN</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('PROF__DR__RECEP_D_K_C_', this.dataset.name)" data-name="PROF. DR. RECEP DİKİCİ" data-count="2">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=PROF__DR__RECEP_D_K_C_&amp;ad=PROF.%20DR.%20RECEP%20D%C4%B0K%C4%B0C%C4%B0" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="PROF. DR. RECEP DİKİCİ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">PROF. DR. RECEP DİKİCİ</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('CUMA_D___KIRIK', this.dataset.name)" data-name="CUMA DİŞİKIRIK" data-count="1">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=CUMA_D___KIRIK&amp;ad=CUMA%20D%C4%B0%C5%9E%C4%B0KIRIK" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="CUMA DİŞİKIRIK — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">CUMA DİŞİKIRIK</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('FAT_H_DEM_R', this.dataset.name)" data-name="FATİH DEMİR" data-count="1">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=FAT_H_DEM_R&amp;ad=FAT%C4%B0H%20DEM%C4%B0R" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="FATİH DEMİR — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">FATİH DEMİR</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('AHMET_C_NEYT__ENER', this.dataset.name)" data-name="AHMET CÜNEYT ŞENER" data-count="1">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=AHMET_C_NEYT__ENER&amp;ad=AHMET%20C%C3%9CNEYT%20%C5%9EENER" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="AHMET CÜNEYT ŞENER — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">AHMET CÜNEYT ŞENER</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('NUH_ALBAYRAK', this.dataset.name)" data-name="NUH ALBAYRAK" data-count="1">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=NUH_ALBAYRAK&amp;ad=NUH%20ALBAYRAK" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="NUH ALBAYRAK — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">NUH ALBAYRAK</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('_EVK__YILMAZ', this.dataset.name)" data-name="ŞEVKİ YILMAZ" data-count="1">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=_EVK__YILMAZ&amp;ad=%C5%9EEVK%C4%B0%20YILMAZ" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="ŞEVKİ YILMAZ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">ŞEVKİ YILMAZ</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('ELVAN_K___K', this.dataset.name)" data-name="ELVAN KÜÇÜK" data-count="1">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=ELVAN_K___K&amp;ad=ELVAN%20K%C3%9C%C3%87%C3%9CK" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="ELVAN KÜÇÜK — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">ELVAN KÜÇÜK</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('ZAFER_B_LG_', this.dataset.name)" data-name="ZAFER BİLGİ" data-count="1">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=ZAFER_B_LG_&amp;ad=ZAFER%20B%C4%B0LG%C4%B0" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="ZAFER BİLGİ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">ZAFER BİLGİ</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('BESTAM__YAZGAN', this.dataset.name)" data-name="BESTAMİ YAZGAN" data-count="1">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=BESTAM__YAZGAN&amp;ad=BESTAM%C4%B0%20YAZGAN" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="BESTAMİ YAZGAN — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">BESTAMİ YAZGAN</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('_AH_N_KARATA_', this.dataset.name)" data-name="ŞAHİN KARATAŞ" data-count="1">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=_AH_N_KARATA_&amp;ad=%C5%9EAH%C4%B0N%20KARATA%C5%9E" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="ŞAHİN KARATAŞ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">ŞAHİN KARATAŞ</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+        <div class="author-card" onclick="openFlipbook('_BRAH_M__NAL', this.dataset.name)" data-name="İBRAHİM İNAL" data-count="1">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=_BRAH_M__NAL&amp;ad=%C4%B0BRAH%C4%B0M%20%C4%B0NAL" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="İBRAHİM İNAL — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">İBRAHİM İNAL</h3>
+                </div>
+            </div>
+            
+            
+        </div>
+    </div>
+
+    
+        <div class="yazar-modal" id="ym_HACER_ELBEY">
+            <div class="yazar-modal-arka" onclick="modalKapat('ym_HACER_ELBEY')"></div>
+            <div class="yazar-modal-icerik">
+                <button class="yazar-modal-kapat" onclick="modalKapat('ym_HACER_ELBEY')" aria-label="Kapat">✕</button>
+                <h2 class="yazar-modal-baslik">HACER ELBEY</h2>
+                <div class="yazar-modal-grid">
+        <div class="author-card" onclick="openFlipbook('HACER_ELBEY', this.dataset.name)" data-name="HACER ELBEY" data-count="40">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=HACER_ELBEY&amp;ad=HACER%20ELBEY" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="HACER ELBEY — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">HACER ELBEY</h3>
+                </div>
+            </div>
+            <div class="kitap-etiketi">Kitap 1 <span class="kitap-tik">✓</span></div>
+            <div style="text-align: center; width: 200px; margin: 0 auto;">
+                <div class="premium-badge" title="Başarı Ödülü: 40+ Yazı Yazarı" style="border-color: #cbd5e1; box-shadow: 0 0 10px rgba(203, 213, 225, 0.3);">
+                    <span>🥈</span>
+                    <span style="color: #cbd5e1;">Gümüş (1 Kitap)</span>
+                </div></div>
+        </div>
+        <div class="author-card" onclick="openFlipbook('HACER_ELBEY_KITAP2', this.dataset.name)" data-name="HACER ELBEY" data-count="25">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=HACER_ELBEY_KITAP2&amp;ad=HACER%20ELBEY" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="HACER ELBEY — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">HACER ELBEY</h3>
+                </div>
+            </div>
+            <div class="kitap-etiketi">Kitap 2</div>
+            
+        </div></div>
+            </div>
+        </div>
+        <div class="yazar-modal" id="ym_HAM__KO_">
+            <div class="yazar-modal-arka" onclick="modalKapat('ym_HAM__KO_')"></div>
+            <div class="yazar-modal-icerik">
+                <button class="yazar-modal-kapat" onclick="modalKapat('ym_HAM__KO_')" aria-label="Kapat">✕</button>
+                <h2 class="yazar-modal-baslik">HAMİ KOÇ</h2>
+                <div class="yazar-modal-grid">
+        <div class="author-card" onclick="openFlipbook('HAM__KO_', this.dataset.name)" data-name="HAMİ KOÇ" data-count="40">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=HAM__KO_&amp;ad=HAM%C4%B0%20KO%C3%87" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="HAMİ KOÇ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">HAMİ KOÇ</h3>
+                </div>
+            </div>
+            <div class="kitap-etiketi">Kitap 1 <span class="kitap-tik">✓</span></div>
+            <div style="text-align: center; width: 200px; margin: 0 auto;">
+                <div class="premium-badge" title="Başarı Ödülü: 40+ Yazı Yazarı" style="border-color: #cbd5e1; box-shadow: 0 0 10px rgba(203, 213, 225, 0.3);">
+                    <span>🥈</span>
+                    <span style="color: #cbd5e1;">Gümüş (1 Kitap)</span>
+                </div></div>
+        </div>
+        <div class="author-card" onclick="openFlipbook('HAM__KO__KITAP2', this.dataset.name)" data-name="HAMİ KOÇ" data-count="4">
+            <a class="yeni-sekme-btn" href="flipbook/index.html?kitap=HAM__KO__KITAP2&amp;ad=HAM%C4%B0%20KO%C3%87" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="HAMİ KOÇ — yeni sekmede aç">↗<span class="yeni-sekme-yazi">Yeni sekmede</span></a>
+            <div class="book-cover">
+                <div class="book-spine"></div>
+                <div class="cover-author-overlay">
+                    <h3 class="cover-author-name">HAMİ KOÇ</h3>
+                </div>
+            </div>
+            <div class="kitap-etiketi">Kitap 2</div>
+            
+        </div></div>
+            </div>
+        </div>
+
+    <footer style="text-align: center; padding: 50px 20px 30px; margin-top: 40px; border-top: 1px solid rgba(255,255,255,0.07); color: #6b7280; font-size: 0.78rem; letter-spacing: 0.3px;">
+        <div>© 2026 ÖZKURBİR Mektep Kütüphanesi</div>
+        <div style="margin-top: 6px; opacity: 0.75;">Powered By Mehmet Kutlu</div>
+    </footer>
+
+    <script>
+        // Kullanıcı adı → gerçek yazar adı/kimlik eşlemesi (bkz. createLibraryHTML
+        // yorumu). Sadece build-time'da bilinen GERÇEK veritabanı bilgisi —
+        // login.html'in tahminine güvenilmiyor.
+        const YAZAR_KIMLIKLERI = {"ali.dayioglu":{"name":"ALİ DAYIOĞLU","id":"AL__DAYIO_LU"},"bilgin.pelister":{"name":"BİLGİN PELİSTER","id":"B_LG_N_PEL_STER"},"erdem.kilic":{"name":"ERDEM KILIÇ","id":"ERDEM_KILI_"},"hami.koc":{"name":"HAMİ KOÇ","id":"HAM__KO_"},"dr.ismail.guler":{"name":"DR. İSMAİL GÜLER","id":"DR___SMA_L_G_LER"},"kadir.unal":{"name":"KADİR ÜNAL","id":"KAD_R__NAL"},"muttalip.hasdemir":{"name":"MUTTALİP HASDEMİR","id":"MUTTAL_P_HASDEM_R"},"mehmet.cosar":{"name":"MEHMET COŞAR","id":"MEHMET_CO_AR"},"rasim.karagul":{"name":"RASİM KARAGÜL","id":"RAS_M_KARAG_L"},"seyhali.tug":{"name":"ŞEYHALİ TUĞ","id":"_EYHAL__TU_"},"mehmet.kutlu":{"name":"MEHMET KUTLU","id":"MEHMET_KUTLU"},"doc.dr.erdal.kilic":{"name":"DOÇ. DR. ERDAL KILIÇ","id":"DO___DR__ERDAL_KILI_"},"adem.keven":{"name":"ADEM KEVEN","id":"ADEM_KEVEN"},"danyal.suzgun":{"name":"DANYAL SÜZGÜN","id":"DANYAL_S_ZG_N"},"emin.keven":{"name":"EMİN KEVEN","id":"EM_N_KEVEN"},"hacer.elbey":{"name":"HACER ELBEY","id":"HACER_ELBEY"},"omer.faruk.konca":{"name":"ÖMER FARUK KONCA","id":"_MER_FARUK_KONCA"},"sebahattin.kazaz":{"name":"SEBAHATTİN KAZAZ","id":"SEBAHATT_N_KAZAZ"},"naci.bektas":{"name":"NACİ BEKTAŞ","id":"NAC__BEKTA_"},"ramazan.aksoy":{"name":"RAMAZAN AKSOY","id":"RAMAZAN_AKSOY"},"asuman.saritac":{"name":"ASUMAN SARITAÇ","id":"ASUMAN_SARITA_"},"fatih.isgoren":{"name":"FATİH İŞGÖREN","id":"FAT_H___G_REN"},"kemal.tunc":{"name":"KEMAL TUNÇ","id":"KEMAL_TUN_"},"cuma.di.si.kirik":{"name":"CUMA DİŞİKIRIK","id":"CUMA_D___KIRIK"},"esra.tunc.samsa":{"name":"ESRA TUNÇ SAMSA","id":"ESRA_TUN__SAMSA"},"dr.belma.uysal":{"name":"DR. BELMA UYSAL","id":"DR__BELMA_UYSAL"},"fatih.demir":{"name":"FATİH DEMİR","id":"FAT_H_DEM_R"},"ali.sedat.aslan":{"name":"ALİ SEDAT ASLAN","id":"AL__SEDAT_ASLAN"},"ahmet.cuneyt.sener":{"name":"AHMET CÜNEYT ŞENER","id":"AHMET_C_NEYT__ENER"},"enes.okutan":{"name":"ENES OKUTAN","id":"ENES_OKUTAN"},"onur.ozelcaglayan":{"name":"ONUR ÖZELÇAĞLAYAN","id":"ONUR__ZEL_A_LAYAN"},"ridvan.aklan":{"name":"RIDVAN AKLAN","id":"RIDVAN_AKLAN"},"mehmet.yildirtan":{"name":"MEHMET YILDIRTAN","id":"MEHMET_YILDIRTAN"},"mustafa.altinsoy":{"name":"MUSTAFA ALTINSOY","id":"MUSTAFA_ALTINSOY"},"azmi.aksoy":{"name":"AZMİ AKSOY","id":"AZM__AKSOY"},"mustafa.canitez":{"name":"MUSTAFA CANITEZ","id":"MUSTAFA_CANITEZ"},"prof.dr.osman.kemal.kayra":{"name":"PROF. DR. OSMAN KEMAL KAYRA","id":"PROF__DR__OSMAN_KEMAL_KAYRA"},"prof.dr.erdi.nc.dundar":{"name":"PROF. DR. ERDİNÇ DÜNDAR","id":"PROF__DR__ERD_N__D_NDAR"},"salih.uyan":{"name":"SALİH UYAN","id":"SAL_H_UYAN"},"yunus.emre.gedi.kli":{"name":"YUNUS EMRE GEDİKLİ","id":"YUNUS_EMRE_GED_KL_"},"ahmet.turkben":{"name":"AHMET TÜRKBEN","id":"AHMET_T_RKBEN"},"fuat.bol":{"name":"FUAT BOL","id":"FUAT_BOL"},"nesat.yayla":{"name":"NEŞAT YAYLA","id":"NE_AT_YAYLA"},"mustafa.uslu":{"name":"MUSTAFA USLU","id":"MUSTAFA_USLU"},"feri.dun.kucuk":{"name":"FERİDUN KÜÇÜK","id":"FER_DUN_K___K"},"nuh.albayrak":{"name":"NUH ALBAYRAK","id":"NUH_ALBAYRAK"},"mustafa.basar":{"name":"MUSTAFA BAŞAR","id":"MUSTAFA_BA_AR"},"necip.yildirim":{"name":"NECİP YILDIRIM","id":"NEC_P_YILDIRIM"},"sevki.yilmaz":{"name":"ŞEVKİ YILMAZ","id":"_EVK__YILMAZ"},"ali.tufekci":{"name":"ALİ TÜFEKÇİ","id":"AL__T_FEK__"},"taskin.kocak":{"name":"TAŞKIN KOÇAK","id":"TA_KIN_KO_AK"},"rauf.enc":{"name":"RAUF ENÇ","id":"RAUF_EN_"},"ismail.kilicaslan":{"name":"İSMAİL KILIÇASLAN","id":"_SMA_L_KILI_ASLAN"},"elvan.kucuk":{"name":"ELVAN KÜÇÜK","id":"ELVAN_K___K"},"halil.oz":{"name":"HALİL ÖZ","id":"HAL_L__Z"},"zafer.bi.lgi":{"name":"ZAFER BİLGİ","id":"ZAFER_B_LG_"},"bestami.yazgan":{"name":"BESTAMİ YAZGAN","id":"BESTAM__YAZGAN"},"sahin.karatas":{"name":"ŞAHİN KARATAŞ","id":"_AH_N_KARATA_"},"yusuf.dursun":{"name":"YUSUF DURSUN","id":"YUSUF_DURSUN"},"prof.dr.recep.di.ki.ci":{"name":"PROF. DR. RECEP DİKİCİ","id":"PROF__DR__RECEP_D_K_C_"},"ibrahim.inal":{"name":"İBRAHİM İNAL","id":"_BRAH_M__NAL"}};
+
+        // Oturum kontrolü
+        const role = localStorage.getItem('userRole');
+        if (!role) {
+            window.location.href = 'login.html';
+        }
+
+        // Görünürlük ayarları
+        if (role === 'admin') {
+            document.getElementById('yonetim-butonu').style.display = 'inline-flex';
+            document.getElementById('hosgeldiniz-mesaj').innerHTML = '👋 Hoş geldiniz, <strong>Yönetici</strong>';
+        } else if (role === 'author') {
+            document.getElementById('yonetim-butonu').style.display = 'none';
+
+            // Giriş kullanıcı adına göre GERÇEK ad/kimliği eşlemeden çöz —
+            // localStorage'daki authorRealName login.html'in (yanlış olabilecek)
+            // tahminidir, buradaki eşleme gerçek veritabanı kaydına dayanır.
+            const girisKullaniciAdi = (localStorage.getItem('username') || '').trim().toLocaleLowerCase('tr');
+            const yazarKaydi = YAZAR_KIMLIKLERI[girisKullaniciAdi];
+            const yazarIsim = (yazarKaydi && yazarKaydi.name) || localStorage.getItem('authorRealName') || '';
+            const yazarId = (yazarKaydi && yazarKaydi.id) || (localStorage.getItem('authorId') || '').toUpperCase();
+            if (yazarKaydi) {
+                localStorage.setItem('authorRealName', yazarIsim);
+                localStorage.setItem('authorId', yazarId);
+            }
+            document.getElementById('hosgeldiniz-mesaj').innerHTML = '✍️ Hoş geldiniz Yazar, <strong>' + yazarIsim + '</strong>';
+
+            // YAZAR girişinde özet kart + popup YOK: yazar kendi sayfasına
+            // girdiğinde bütün kitapları doğrudan rafta yan yana görmeli
+            // (2026-08-05 isteği). Her özet kartın yerine, kendi modalindeki
+            // cilt kartları sırayla ızgaraya taşınır; özet kart ve artık boşa
+            // düşen modal DOM'dan silinir. Bu, aşağıdaki "sadece kendi kitabı"
+            // süzgecinden ÖNCE çalışmalı — aksi halde başka bir yazarın özet
+            // kartı silinip modali yetim kalır. Okuyucu ve yönetici girişinde
+            // özet kart + popup davranışı aynen korunur.
+            document.querySelectorAll('.author-card[data-modal]').forEach(ozetKart => {
+                const modal = document.getElementById(ozetKart.dataset.modal);
+                if (modal) {
+                    modal.querySelectorAll('.author-card').forEach(ciltKarti => {
+                        ozetKart.parentNode.insertBefore(ciltKarti, ozetKart);
+                    });
+                    modal.remove();
+                }
+                ozetKart.remove();
+            });
+
+            // Yazar SADECE kendi kitabını/kitaplarını görsün — başka yazarların
+            // kartları DOM'dan tamamen kaldırılır (arama/sıralama ile geri
+            // gelmesinler diye style.display değil .remove() kullanılıyor).
+            const yazarAdUst = yazarIsim.trim().toLocaleUpperCase('tr');
+            const yazarIdUst = yazarId.toUpperCase();
+            let kalanKart = 0;
+            document.querySelectorAll('.author-card').forEach(kart => {
+                const kartAd = (kart.dataset.name || '').trim().toLocaleUpperCase('tr');
+                const kartId = kartAd.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
+                const kendiKitabiMi = (yazarAdUst && kartAd === yazarAdUst) || (yazarIdUst && kartId === yazarIdUst);
+                if (!kendiKitabiMi) kart.remove(); else kalanKart++;
+            });
+
+            /* Yazar giriş yaptı ama hiçbir kart eşleşmedi → SESSİZ BOŞ RAF.
+               Kullanıcının "yazarın yazıları görünmüyor" şikâyeti buydu.
+               Artık sebebi ayırt edip açıkça söylüyoruz: (a) kullanıcı adı
+               eşlemede yok (yanlış/eskimiş kullanıcı adıyla giriş yapılmış),
+               (b) eşleme doğru ama yazarın hiç yazısı yok (kitap üretilmemiş). */
+            if (kalanKart === 0) {
+                const grid = document.querySelector('.library-grid');
+                if (grid) {
+                    const tanindi = !!yazarKaydi;
+                    grid.innerHTML =
+                        '<div style="grid-column:1/-1; text-align:center; padding:50px 20px; color:#e8e8f0;">'
+                        + '<div style="font-size:2.4rem; margin-bottom:14px;">' + (tanindi ? '📭' : '⚠️') + '</div>'
+                        + '<h3 style="margin:0 0 10px; color:#ffc107;">'
+                        + (tanindi ? 'Henüz kitabınız oluşmamış' : 'Kullanıcı adı tanınmadı')
+                        + '</h3>'
+                        + '<p style="margin:0 auto; max-width:520px; line-height:1.6; color:#b9b9c8;">'
+                        + (tanindi
+                            ? ('<strong>' + yazarIsim + '</strong> adına kayıtlı yazı bulunmadığı için kitapçık üretilmemiş. '
+                               + 'Yönetici, panelden "✍️ Elle Yazı Ekle" ile yazı girdiğinde kitabınız burada görünecek.')
+                            : ('Girdiğiniz kullanıcı adı (<strong>' + (localStorage.getItem('username') || '') + '</strong>) '
+                               + 'sistemdeki yazar kayıtlarıyla eşleşmedi, bu yüzden size ait bir kitap bulunamadı. '
+                               + 'Doğru kullanıcı adınızı yöneticiden öğrenip tekrar giriş yapın.'))
+                        + '</p></div>';
+                }
+            }
+        } else {
+            document.getElementById('yonetim-butonu').style.display = 'none';
+            document.getElementById('hosgeldiniz-mesaj').innerHTML = '📖 <strong>Okuyucu Paneli</strong>';
+        }
+
+        function cikisYap() {
+            localStorage.removeItem('userRole');
+            localStorage.removeItem('username');
+            localStorage.removeItem('password');
+            localStorage.removeItem('authorRealName');
+            localStorage.removeItem('authorId');
+            window.location.href = 'login.html';
+        }
+
+        function openFlipbook(authorId, authorRealName) {
+            localStorage.setItem('currentAuthor', authorId);
+            if (authorRealName) {
+                localStorage.setItem('currentAuthorRealName', authorRealName);
+            }
+            window.location.href = 'flipbook/index.html';
+        }
+
+        // Çok kitaplı yazarın ana raftaki tek kapağına tıklanınca açılan,
+        // yazarın tüm kitaplarını (tamamlanmış + devam eden) gösteren pencere.
+        function yazarKitaplariniAc(modalId) {
+            document.getElementById(modalId)?.classList.add('acik');
+        }
+        function modalKapat(modalId) {
+            document.getElementById(modalId)?.classList.remove('acik');
+        }
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.yazar-modal.acik').forEach(m => m.classList.remove('acik'));
+            }
+        });
+
+        function suzVeSirala() {
+            const sorgu = document.getElementById('ara').value.trim().toLocaleLowerCase('tr');
+            const olcut = document.getElementById('sirala').value;
+            const izgara = document.getElementById('izgara');
+            const kartlar = [...izgara.querySelectorAll('.author-card')];
+
+            kartlar.sort((a, b) => {
+                const kitapFarki = b.classList.contains('yakinda') - a.classList.contains('yakinda');
+                if (kitapFarki !== 0) return -kitapFarki;
+                if (olcut === 'ad') return a.dataset.name.localeCompare(b.dataset.name, 'tr');
+                return Number(b.dataset.count) - Number(a.dataset.count);
+            }).forEach(k => izgara.appendChild(k));
+
+            let gorunen = 0;
+            kartlar.forEach(k => {
+                const uyuyor = !sorgu || k.dataset.name.toLocaleLowerCase('tr').includes(sorgu);
+                k.style.display = uyuyor ? '' : 'none';
+                if (uyuyor) gorunen++;
+            });
+            document.getElementById('sonuc-yok').style.display = gorunen ? 'none' : 'block';
+        }
+    </script>
+</body>
+</html>
