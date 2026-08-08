@@ -5,8 +5,10 @@ const { exec } = require('child_process');
 
 const PORT = 3000;
 
-// Statik dosyaların kökü. server.js zaten web sayfası/ içinde, __dirname doğrudan burada.
-const WEB_KOK = __dirname;
+// Statik dosyaların kökü. 2026-08-01'deki klasör ayrımından sonra tüm HTML/
+// flipbook/PDF çıktıları "web sayfası/" altına taşındı; sunucu hâlâ proje
+// kökünü servis ettiği için hiçbir sayfa açılmıyordu (login.html → 404).
+const WEB_KOK = path.join(__dirname, 'web sayfası');
 
 // MIME types lookup
 const MIME_TYPES = {
@@ -14,7 +16,6 @@ const MIME_TYPES = {
     '.css': 'text/css',
     '.js': 'application/javascript; charset=utf-8',
     '.json': 'application/json; charset=utf-8',
-    '.pdf': 'application/pdf',
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
     '.jpeg': 'image/jpeg',
@@ -92,9 +93,9 @@ function dbKullaniciGuncelle() {
             // (örn. havuz kökünden `node "30. PROGRAM .../server.js"`) script
             // adı bulunamaz ve sessizce başarısız olur. /api/sync'te zaten
             // vardı, bu üç çağrıda eksikti.
-            // exec('node build_library.js', { cwd: __dirname }, (err, stdout) => {
-            //     if (!err) console.log("✓ Kütüphane yeni kimlik bilgileriyle yeniden oluşturuldu.");
-            // });
+            exec('node build_library.js', { cwd: __dirname }, (err, stdout) => {
+                if (!err) console.log("✓ Kütüphane yeni kimlik bilgileriyle yeniden oluşturuldu.");
+            });
         }
     } catch(e) {
         console.error("Kullanıcı güncellerken hata oluştu:", e);
@@ -508,9 +509,8 @@ const server = http.createServer((req, res) => {
                     bekleyenler.splice(itemIndex, 1);
                     saveBekleyenYazilar(bekleyenler);
 
-                    // exec('node build_library.js && node generate_pdf_kit.js', { cwd: __dirname }, (err, stdout, stderr) => {
-                    yaziEkleniyor = false;
-                    if (false) { // Disabled block
+                    exec('node build_library.js && node generate_pdf_kit.js', { cwd: __dirname }, (err, stdout, stderr) => {
+                        yaziEkleniyor = false;
                         if (err) {
                             console.error('Derleme hatası:', err);
                         }
@@ -537,11 +537,71 @@ const server = http.createServer((req, res) => {
 
     // API: Webden Canlı Güncelle (tarama + yeniden derleme)
     if (req.method === 'POST' && pathname === '/api/sync') {
-        // web sayfası standalone olduğu için tarama ve build işlemleri burada yapılamaz.
-        // Yazı eklendiğinde otomatik build zaten yapılır; manuel senkronizasyon gerekirse
-        // KAYNAK-ARAÇLAR/ klasöründen build_library.js çalıştırılmalıdır.
-        res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: false, error: 'Manuel senkronizasyon desteklenmiyor. İstatistikler yazı eklendiğinde otomatik güncelleniyor.' }));
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            let data = {};
+            try { data = JSON.parse(body || '{}'); } catch (e) { data = {}; }
+
+            if (!yoneticiMi(data.username, data.password) || data.role !== 'admin') {
+                res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ success: false, error: 'Bu işlemi yalnızca yönetici başlatabilir. Lütfen tekrar giriş yapın.' }));
+                return;
+            }
+
+            if (taramaCalisiyor) {
+                res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ success: false, error: 'Zaten devam eden bir tarama var. Lütfen bitmesini bekleyin.' }));
+                return;
+            }
+
+            if (yaziEkleniyor) {
+                res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ success: false, error: 'Şu anda elle eklenen bir yazı işleniyor. Lütfen bitmesini bekleyip tekrar deneyin.' }));
+                return;
+            }
+
+            taramaCalisiyor = true;
+            const oncesi = veritabaniOzeti();
+            const baslangic = Date.now();
+            console.log('▶ Webden canlı güncelleme başlatıldı...');
+
+            exec('node scrape.js && node build_library.js && node generate_pdf_kit.js', {
+                cwd: __dirname,
+                maxBuffer: 50 * 1024 * 1024,
+                timeout: 30 * 60 * 1000
+            }, (err, stdout, stderr) => {
+                taramaCalisiyor = false;
+                const saniye = Math.round((Date.now() - baslangic) / 1000);
+
+                if (err) {
+                    console.error('✗ Güncelleme başarısız:', err.message);
+                    res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({
+                        success: false,
+                        error: err.killed
+                            ? 'Tarama 30 dakika sınırını aştığı için durduruldu.'
+                            : 'Güncelleme sırasında hata oluştu.',
+                        detay: (stderr || err.message || '').slice(-2000),
+                        saniye
+                    }));
+                    return;
+                }
+
+                const sonrasi = veritabaniOzeti();
+                console.log('✓ Webden canlı güncelleme tamamlandı (' + saniye + ' sn).');
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({
+                    success: true,
+                    saniye,
+                    oncesi,
+                    sonrasi,
+                    yeniYazar: sonrasi.yazar - oncesi.yazar,
+                    yeniMakale: sonrasi.makale - oncesi.makale,
+                    log: (stdout || '').slice(-4000)
+                }));
+            });
+        });
         return;
     }
 

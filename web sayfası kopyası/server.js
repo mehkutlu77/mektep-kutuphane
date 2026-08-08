@@ -14,7 +14,6 @@ const MIME_TYPES = {
     '.css': 'text/css',
     '.js': 'application/javascript; charset=utf-8',
     '.json': 'application/json; charset=utf-8',
-    '.pdf': 'application/pdf',
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
     '.jpeg': 'image/jpeg',
@@ -92,9 +91,9 @@ function dbKullaniciGuncelle() {
             // (örn. havuz kökünden `node "30. PROGRAM .../server.js"`) script
             // adı bulunamaz ve sessizce başarısız olur. /api/sync'te zaten
             // vardı, bu üç çağrıda eksikti.
-            // exec('node build_library.js', { cwd: __dirname }, (err, stdout) => {
-            //     if (!err) console.log("✓ Kütüphane yeni kimlik bilgileriyle yeniden oluşturuldu.");
-            // });
+            exec('node build_library.js', { cwd: __dirname }, (err, stdout) => {
+                if (!err) console.log("✓ Kütüphane yeni kimlik bilgileriyle yeniden oluşturuldu.");
+            });
         }
     } catch(e) {
         console.error("Kullanıcı güncellerken hata oluştu:", e);
@@ -508,9 +507,8 @@ const server = http.createServer((req, res) => {
                     bekleyenler.splice(itemIndex, 1);
                     saveBekleyenYazilar(bekleyenler);
 
-                    // exec('node build_library.js && node generate_pdf_kit.js', { cwd: __dirname }, (err, stdout, stderr) => {
-                    yaziEkleniyor = false;
-                    if (false) { // Disabled block
+                    exec('node build_library.js && node generate_pdf_kit.js', { cwd: __dirname }, (err, stdout, stderr) => {
+                        yaziEkleniyor = false;
                         if (err) {
                             console.error('Derleme hatası:', err);
                         }

@@ -108,10 +108,6 @@ window.YAZAR_KULLANICILARI = {
   "name": "MUSTAFA USLU",
   "id": "MUSTAFA_USLU"
  },
- "mehmet.kutlu": {
-  "name": "MEHMET KUTLU",
-  "id": "MEHMET_KUTLU"
- },
  "fatih.isgoren": {
   "name": "FATİH İŞGÖREN",
   "id": "FAT_H___G_REN"
@@ -167,6 +163,10 @@ window.YAZAR_KULLANICILARI = {
  "mustafa.basar": {
   "name": "MUSTAFA BAŞAR",
   "id": "MUSTAFA_BA_AR"
+ },
+ "mehmet.kutlu": {
+  "name": "MEHMET KUTLU",
+  "id": "MEHMET_KUTLU"
  },
  "onur.ozelcaglayan": {
   "name": "ONUR ÖZELÇAĞLAYAN",
