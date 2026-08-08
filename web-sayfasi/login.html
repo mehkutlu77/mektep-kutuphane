@@ -450,17 +450,25 @@
             }
 
             if (loginSuccess) {
-                localStorage.setItem('userRole', selectedRole);
+                /* ROLÜ SUNUCU SÖYLER (2026-08-08).
+                   Eskiden ekrandaki sekme (selectedRole) neyse o kaydediliyordu.
+                   Dört rollü yapıda yetki, seçilen sekmeden değil kimlikten
+                   gelir: sunucu `role` alanında gerçek rolü döner
+                   (admin | denetim | yazar | okuyucu). Sunucuya ulaşılamayan
+                   çevrimdışı durumda eski davranışa düşülür. */
+                const sunucuRol = (loginData && loginData.role) ? loginData.role : selectedRole;
+                localStorage.setItem('userRole', sunucuRol);
                 localStorage.setItem('username', usernameInput);
                 localStorage.setItem('password', passwordInput);
 
-                if (selectedRole === 'author' && loginData) {
+                if (loginData) {
                     if (loginData.authorName) localStorage.setItem('authorRealName', loginData.authorName);
                     if (loginData.authorId) localStorage.setItem('authorId', loginData.authorId);
                 }
 
-                // Yönlendirme: Yönetici ise Yönetim Paneline, değilse Kütüphaneye
-                if (selectedRole === 'admin') {
+                /* Yönlendirme: yönetici ve denetim onay paneline, diğerleri
+                   kütüphaneye. Denetim panelde yalnızca onay bölümünü görür. */
+                if (sunucuRol === 'admin' || sunucuRol === 'denetim') {
                     window.location.href = 'mektep_yonetim.html';
                 } else {
                     window.location.href = 'mektep_kutuphane.html';

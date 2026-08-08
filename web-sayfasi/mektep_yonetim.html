@@ -257,6 +257,7 @@
                 📩 Onay Bekleyen Yazılar
                 <span id="pending-badge" style="display:none; background:#ef4444; color:#fff; border-radius:10px; padding:2px 8px; font-size:0.75rem; font-weight:700; margin-left:4px;">0</span>
             </button>
+            <button class="btn-act" id="btn-roller" onclick="showRolesModal()" style="background:#7c3aed; border-color:#7c3aed;">👥 Kullanıcı Yetkileri</button>
             <button class="btn-act ekle-btn" onclick="showAddArticleModal()">✍️ Elle Yazı Ekle</button>
             <button class="btn-act sync-btn" onclick="showSyncModal()">🔄 Webden Canlı Güncelle</button>
         </div>
@@ -651,9 +652,11 @@
     </div>
 
     <script>
-        // Oturum kontrolü (Sadece yönetici)
+        /* Oturum kontrolü: yönetici VE denetim bu sayfaya girebilir.
+           Denetim yalnızca onay bölümünü görür (aşağıda sadeleştirme var);
+           gerçek yetki kontrolü her hâlükârda sunucuda yapılıyor. */
         const role = localStorage.getItem('userRole');
-        if (role !== 'admin') {
+        if (role !== 'admin' && role !== 'denetim') {
             window.location.href = 'login.html';
         }
 
@@ -1105,7 +1108,11 @@
                 const res = await fetch(`/api/pending-articles?username=${encodeURIComponent(u)}&password=${encodeURIComponent(p)}`);
                 const data = await res.json();
                 if (data.success && data.pendingArticles) {
-                    const count = data.pendingArticles.length;
+                    /* SADECE işlem bekleyenler sayılır. Onaylanan/reddedilen
+                       kayıtlar artık listede kaldığı (geçmiş için) bu filtre
+                       olmazsa rozet, işi bitmiş yazıları da sayıp hiç iş yokken
+                       bile kırmızı bildirim gösterirdi. */
+                    const count = data.pendingArticles.filter(x => (x.status || 'pending') === 'pending').length;
                     const badge = document.getElementById('pending-badge');
                     if (badge) {
                         if (count > 0) {
@@ -1127,6 +1134,128 @@
 
         function closePendingArticlesModal() {
             document.getElementById('pending-articles-modal').style.display = 'none';
+        }
+
+        /* ── KULLANICI YETKİLERİ (ROLLER) ─────────────────────────────────
+           Roller sunucuda yazar kaydının rol alanında tutulur ve YETKİ
+           KARARLARI SUNUCUDA verilir. Buradaki arayüz yalnızca atama yapar;
+           tarayıcıdaki hiçbir şey yetkinin kendisi değildir. */
+        window.ROL_CACHE = [];
+
+        async function showRolesModal() {
+            document.getElementById('roles-modal').style.display = 'flex';
+            document.getElementById('roles-durum-box').style.display = 'none';
+            await rolleriYukle();
+        }
+
+        function closeRolesModal() {
+            document.getElementById('roles-modal').style.display = 'none';
+        }
+
+        async function rolleriYukle() {
+            const kap = document.getElementById('roles-container');
+            kap.innerHTML = '<div style="color:#aaa; text-align:center; padding:20px;">Yükleniyor...</div>';
+            try {
+                const u = localStorage.getItem('username') || '';
+                const p = localStorage.getItem('password') || '';
+                const res = await fetch(`/api/roles?username=${encodeURIComponent(u)}&password=${encodeURIComponent(p)}`);
+                const data = await res.json();
+                if (!data.success) {
+                    kap.innerHTML = '<div style="color:#ef4444; text-align:center; padding:20px;">' + (data.message || 'Yüklenemedi.') + '</div>';
+                    return;
+                }
+                window.ROL_CACHE = data.roller;
+                rolleriCiz(data.roller);
+            } catch (e) {
+                kap.innerHTML = '<div style="color:#ef4444; text-align:center; padding:20px;">Sunucu hatası.</div>';
+            }
+        }
+
+        function rolEtiketi(r) {
+            const m = {
+                yonetici: { ad: 'Yönetici', renk: '#a78bfa' },
+                denetim:  { ad: 'Denetim',  renk: '#38bdf8' },
+                yazar:    { ad: 'Yazar',    renk: '#9ca3af' },
+                okuyucu:  { ad: 'Okuyucu',  renk: '#f59e0b' }
+            };
+            return m[r] || m.yazar;
+        }
+
+        function rolleriCiz(liste) {
+            const kap = document.getElementById('roles-container');
+            if (!liste.length) {
+                kap.innerHTML = '<div style="color:#9ca3af; text-align:center; padding:20px;">Kayıt yok.</div>';
+                return;
+            }
+            kap.innerHTML = liste.map(k => {
+                const et = rolEtiketi(k.rol);
+                const secenekler = ['yonetici', 'denetim', 'yazar', 'okuyucu']
+                    .map(r => `<option value="${r}" ${r === k.rol ? 'selected' : ''}>${rolEtiketi(r).ad}</option>`).join('');
+                return `
+                <div style="display:flex; align-items:center; gap:12px; background:#18181c; border:1px solid #2d2d38; border-left:3px solid ${et.renk}; border-radius:8px; padding:10px 13px; margin-bottom:7px;">
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:0.9rem; font-weight:600; color:#e5e7eb; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${k.name}</div>
+                        <div style="font-size:0.73rem; color:#8a8a9e; margin-top:2px;">${k.username || '—'} &nbsp;•&nbsp; ${k.yaziSayisi} yazı</div>
+                    </div>
+                    <select onchange="rolDegistir('${k.name.replace(/'/g, "\\'")}', this.value, this)"
+                            style="background:#22222a; color:#e5e7eb; border:1px solid #3a3a46; border-radius:6px; padding:6px 9px; font-size:0.82rem; cursor:pointer;">
+                        ${secenekler}
+                    </select>
+                </div>`;
+            }).join('');
+        }
+
+        function rolleriFiltrele() {
+            const q = (document.getElementById('roles-arama').value || '').toLocaleLowerCase('tr').trim();
+            if (!q) return rolleriCiz(window.ROL_CACHE);
+            rolleriCiz(window.ROL_CACHE.filter(k =>
+                k.name.toLocaleLowerCase('tr').includes(q) ||
+                (k.username || '').toLocaleLowerCase('tr').includes(q)
+            ));
+        }
+
+        async function rolDegistir(hedefAd, yeniRol, selectEl) {
+            const kutu = document.getElementById('roles-durum-box');
+            const eskiRol = (window.ROL_CACHE.find(k => k.name === hedefAd) || {}).rol;
+
+            if (yeniRol === 'yonetici' && !confirm(hedefAd + ' kullanıcısına TAM YÖNETİCİ yetkisi veriliyor.\n\nBu kişi rol atama dâhil her şeyi yapabilecek. Emin misiniz?')) {
+                if (selectEl && eskiRol) selectEl.value = eskiRol;
+                return;
+            }
+
+            try {
+                const u = localStorage.getItem('username') || '';
+                const p = localStorage.getItem('password') || '';
+                const res = await fetch('/api/set-role', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: u, password: p, hedefAd: hedefAd, rol: yeniRol })
+                });
+                const data = await res.json();
+
+                kutu.style.display = 'block';
+                if (data.success) {
+                    kutu.style.background = 'rgba(34,197,94,0.15)';
+                    kutu.style.color = '#86efac';
+                    kutu.style.border = '1px solid #22c55e';
+                    kutu.textContent = '✅ ' + data.message;
+                    const k = window.ROL_CACHE.find(x => x.name === hedefAd);
+                    if (k) k.rol = yeniRol;
+                } else {
+                    kutu.style.background = 'rgba(239,68,68,0.15)';
+                    kutu.style.color = '#fca5a5';
+                    kutu.style.border = '1px solid #ef4444';
+                    kutu.textContent = '❌ ' + (data.message || 'Değiştirilemedi.');
+                    if (selectEl && eskiRol) selectEl.value = eskiRol; // sunucu reddettiyse geri al
+                }
+            } catch (e) {
+                kutu.style.display = 'block';
+                kutu.style.background = 'rgba(239,68,68,0.15)';
+                kutu.style.color = '#fca5a5';
+                kutu.style.border = '1px solid #ef4444';
+                kutu.textContent = '❌ Sunucu ile iletişim hatası.';
+                if (selectEl && eskiRol) selectEl.value = eskiRol;
+            }
         }
 
         async function fetchAndRenderPendingArticles() {
@@ -1294,6 +1423,31 @@
         }
 
         document.addEventListener('DOMContentLoaded', loadPendingCount);
+
+        /* ── DENETİM ROLÜ İÇİN SADELEŞTİRME ───────────────────────────────
+           Denetim yetkisi olan kişi de bu sayfaya girer, ama işi yalnızca
+           yazı onaylamaktır. Kendisini ilgilendirmeyen düğmeler gizlenir.
+           BU SADECE GÖRSEL BİR SADELEŞTİRME — asıl engelleme sunucuda:
+           /api/set-role ve /api/sync yönetici olmayanı zaten reddediyor.
+           Düğmeyi gizlemek yetki değildir, o yüzden ikisi bir arada. */
+        document.addEventListener('DOMContentLoaded', function () {
+            const rol = localStorage.getItem('userRole') || '';
+            if (rol !== 'denetim') return;
+
+            document.querySelectorAll('.header-actions .btn-act').forEach(el => {
+                const t = (el.textContent || '');
+                const korunacak = t.includes('Onay Bekleyen') || t.includes('Kütüphaneye Dön');
+                if (!korunacak) el.style.display = 'none';
+            });
+
+            const baslik = document.querySelector('header h1');
+            if (baslik) {
+                const not = document.createElement('div');
+                not.style.cssText = 'font-size:0.8rem; color:#38bdf8; margin-top:6px; font-weight:600;';
+                not.textContent = '🛡️ Denetim yetkisiyle giriş yaptınız — yazı onaylayabilirsiniz (kendi yazılarınız hariç).';
+                baslik.parentNode.insertBefore(not, baslik.nextSibling);
+            }
+        });
     </script>
 
     <!-- ══ Yönetici Şifre Değiştirme Modalı ══ -->
@@ -1334,6 +1488,35 @@
             <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
                 <button type="button" onclick="closeChangePasswordModal()" class="btn-act" style="background:#374151;">İptal</button>
                 <button type="button" onclick="submitAdminPasswordChange()" class="btn-act" style="background:#e1b12c; color:#111; border-color:#e1b12c; font-weight:700;">💾 Şifreyi Güncelle</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ Kullanıcı Yetkileri (Rol) Modalı ══ -->
+    <div id="roles-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:1000; justify-content:center; align-items:center;">
+        <div style="background:#22222a; border:1px solid #3a3a46; border-radius:14px; padding:26px; width:min(820px, 94vw); max-height:85vh; display:flex; flex-direction:column; color:#fff; box-shadow:0 20px 50px rgba(0,0,0,0.6); overflow:hidden;">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #3a3a46; padding-bottom:14px; margin-bottom:14px;">
+                <h3 style="margin:0; font-size:1.2rem; color:#a78bfa;">👥 Kullanıcı Yetkileri</h3>
+                <button onclick="closeRolesModal()" style="background:none; border:none; color:#aaa; font-size:1.5rem; cursor:pointer;">&times;</button>
+            </div>
+
+            <div style="background:#18181c; border:1px solid #2d2d38; border-radius:8px; padding:11px 14px; margin-bottom:14px; font-size:0.79rem; color:#9ca3af; line-height:1.7;">
+                <b style="color:#e5e7eb;">Yönetici</b> — her şeyi yapabilir, yetki atayabilir &nbsp;•&nbsp;
+                <b style="color:#e5e7eb;">Denetim</b> — yazı onaylar/reddeder (<u>kendi yazısı hariç</u>) &nbsp;•&nbsp;
+                <b style="color:#e5e7eb;">Yazar</b> — yalnızca kendi yazılarını gönderir &nbsp;•&nbsp;
+                <b style="color:#e5e7eb;">Okuyucu</b> — yalnızca okur
+            </div>
+
+            <div id="roles-durum-box" style="display:none; padding:11px; border-radius:8px; font-size:0.86rem; margin-bottom:12px;"></div>
+
+            <input id="roles-arama" oninput="rolleriFiltrele()" placeholder="🔍 İsim ara..." style="background:#18181c; border:1px solid #3a3a46; color:#fff; border-radius:8px; padding:9px 12px; font-size:0.86rem; margin-bottom:12px; outline:none;">
+
+            <div id="roles-container" style="flex:1; overflow-y:auto; padding-right:6px;">
+                <div style="color:#aaa; text-align:center; padding:20px;">Yükleniyor...</div>
+            </div>
+
+            <div style="text-align:right; margin-top:14px; border-top:1px solid #3a3a46; padding-top:12px;">
+                <button onclick="closeRolesModal()" class="btn-act" style="background:#4b5563;">Kapat</button>
             </div>
         </div>
     </div>

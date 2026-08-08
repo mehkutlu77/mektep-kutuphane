@@ -171,6 +171,72 @@ function saveBekleyenYazilar(liste) {
     }
 }
 
+/* ── ROLLER (2026-08-08) ────────────────────────────────────────────────────
+   Rol, yazar kaydındaki `rol` alanında tutulur; alan yoksa 'yazar' sayılır.
+   admin_hesap.json'daki ana yönetici her zaman 'yonetici'dir.
+
+     yonetici : her şey (rol atama dâhil)
+     denetim  : yazı onaylayıp reddedebilir — AMA KENDİ yazısını göremez ve
+                onaylayamaz (çıkar çatışması); ayrıca kendi kitapçığını
+                normal yazar gibi düzenler
+     yazar    : yalnızca kendi yazılarını gönderir/düzenler
+     okuyucu  : yalnızca okur; yazı gönderemez, düzenleyemez
+*/
+const ROLLER = ['yonetici', 'denetim', 'yazar', 'okuyucu'];
+
+function rolNormalize(r) {
+    const x = (r || '').trim().toLowerCase();
+    return ROLLER.includes(x) ? x : 'yazar';
+}
+
+/* Kimlik + rol çözümlemesi. Başarısızsa null döner.
+   { rol, yazar }  → yazar, ana yönetici girişinde null olabilir. */
+function kimlikCozumle(username, password) {
+    if (yoneticiMi(username, password)) {
+        const kayit = yazarKaydiBul(username);
+        return { rol: 'yonetici', yazar: kayit, yazarAdi: kayit ? kayit.name : null };
+    }
+
+    const uName = (username || '').trim().toLowerCase();
+    const pwd = (password || '').trim();
+    const db = veritabaniOku();
+    if (!db) return null;
+
+    const kayit = db.find(a =>
+        (a.username || '').trim().toLowerCase() === uName &&
+        (a.password || 'mektep123') === pwd
+    );
+    if (!kayit) return null;
+
+    return { rol: rolNormalize(kayit.rol), yazar: kayit, yazarAdi: kayit.name };
+}
+
+function veritabaniOku() {
+    const dbPath = path.join(__dirname, 'veritabani', 'yazarlar_veritabani.json');
+    if (!fs.existsSync(dbPath)) return null;
+    try {
+        return JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+    } catch (e) {
+        return null;
+    }
+}
+
+function yazarKaydiBul(username) {
+    const db = veritabaniOku();
+    if (!db) return null;
+    const uName = (username || '').trim().toLowerCase();
+    return db.find(a => (a.username || '').trim().toLowerCase() === uName) || null;
+}
+
+// Onay/red yetkisi: yönetici ve denetim. Denetim KENDİ yazısına dokunamaz.
+function onaylayabilirMi(kimlik, gonderiYazarAdi) {
+    if (!kimlik) return false;
+    if (kimlik.rol === 'yonetici') return true;
+    if (kimlik.rol !== 'denetim') return false;
+    const kendi = (kimlik.yazarAdi || '').toLocaleUpperCase('tr');
+    return kendi !== (gonderiYazarAdi || '').toLocaleUpperCase('tr');
+}
+
 /* Yazar kimlik doğrulaması. Başarılıysa veritabanındaki yazar kaydını,
    değilse null döner. Kullanıcı adı VEYA görünen ad ile eşleşmeye izin verir
    (/api/author-submit-article'daki mevcut davranışla aynı).
@@ -299,29 +365,34 @@ const server = http.createServer((req, res) => {
                 const uName = (username || '').trim().toLowerCase();
                 const pwd = (password || '').trim();
 
-                if (role === 'admin') {
-                    if (yoneticiMi(username, password)) {
-                        const adminAcc = getAdminHesap();
-                        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-                        res.end(JSON.stringify({ success: true, role: 'admin', username: adminAcc.username }));
-                        return;
+                /* ROLÜ SUNUCU BELİRLER (2026-08-08).
+                   Eskiden istemci hangi rolle gireceğini kendi seçiyordu
+                   (giriş ekranındaki sekme) ve sunucu o seçime göre kontrol
+                   yapıyordu. Dört rollü yapıda bu hem yetersiz hem güvensiz:
+                   yetki, kimlik bilgisinin kendisinden çıkmalı. `role`
+                   parametresi artık yalnızca ESKİ istemcilerle uyum için
+                   okunuyor, karara etkisi yok.
+
+                   Geriye dönük uyum: 'yonetici' rolü dışarıya 'admin' olarak
+                   bildirilir; mevcut sayfalar userRole==='admin' kontrolü
+                   yapıyor ve bunların hepsini değiştirmek gereksiz risk. */
+                const kimlik = kimlikCozumle(username, password);
+
+                if (kimlik) {
+                    const disRol = kimlik.rol === 'yonetici' ? 'admin' : kimlik.rol;
+                    const cevap = { success: true, role: disRol, gercekRol: kimlik.rol };
+
+                    if (kimlik.yazar) {
+                        cevap.authorName = kimlik.yazar.name;
+                        cevap.authorId = kimlik.yazar.name.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
+                        cevap.username = kimlik.yazar.username || uName;
                     } else {
-                        res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
-                        res.end(JSON.stringify({ success: false, message: 'Hatalı yönetici kullanıcı adı veya şifre!' }));
-                        return;
+                        cevap.username = getAdminHesap().username;
                     }
-                } else if (role === 'author') {
-                    const dbPath = path.join(__dirname, 'veritabani', 'yazarlar_veritabani.json');
-                    if (fs.existsSync(dbPath)) {
-                        const db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-                        const author = db.find(a => (a.username || nameToUsername(a.name)) === uName && (a.password || 'mektep123') === pwd);
-                        if (author) {
-                            const safeName = author.name.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
-                            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-                            res.end(JSON.stringify({ success: true, role: 'author', authorName: author.name, authorId: safeName }));
-                            return;
-                        }
-                    }
+
+                    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify(cevap));
+                    return;
                 }
 
                 res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -427,6 +498,13 @@ const server = http.createServer((req, res) => {
                     return;
                 }
 
+                // 'okuyucu' rolü yalnızca okur; yazı gönderemez.
+                if (authorRecord && rolNormalize(authorRecord.rol) === 'okuyucu') {
+                    res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: false, message: 'Hesabınız okuyucu yetkisinde. Yazı gönderme yetkiniz bulunmuyor.' }));
+                    return;
+                }
+
                 const hedefYazarAdi = authorRecord ? authorRecord.name : (yazarAdi || 'YAZAR');
                 const bekleyenler = getBekleyenYazilar();
 
@@ -514,6 +592,12 @@ const server = http.createServer((req, res) => {
                     return;
                 }
 
+                if (rolNormalize(yazar.rol) === 'okuyucu') {
+                    res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: false, message: 'Hesabınız okuyucu yetkisinde. Yazı gönderme yetkiniz bulunmuyor.' }));
+                    return;
+                }
+
                 const baslik = (d.title || '').trim();
                 const icerik = (d.content || '').replace(/\r\n/g, '\n').trim();
 
@@ -571,21 +655,107 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    /* API: Kullanıcı rollerini listeleme (yalnızca yönetici).
+       Şifre DÖNÜLMEZ — panelde gerekmiyor, sızdırmanın anlamı yok. */
+    if (req.method === 'GET' && pathname === '/api/roles') {
+        const q = urlObj.searchParams;
+        const kimlik = kimlikCozumle(q.get('username'), q.get('password'));
+
+        if (!kimlik || kimlik.rol !== 'yonetici') {
+            res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ success: false, message: 'Rolleri yalnızca yönetici görebilir.' }));
+            return;
+        }
+
+        const db = veritabaniOku() || [];
+        const liste = db.map(a => ({
+            name: a.name,
+            username: a.username || '',
+            rol: rolNormalize(a.rol),
+            yaziSayisi: (a.articles || []).length
+        })).sort((x, y) => x.name.localeCompare(y.name, 'tr'));
+
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: true, roller: liste, tanimliRoller: ROLLER }));
+        return;
+    }
+
+    // API: Bir kullanıcının rolünü değiştirme (yalnızca yönetici)
+    if (req.method === 'POST' && pathname === '/api/set-role') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const d = JSON.parse(body || '{}');
+                const kimlik = kimlikCozumle(d.username, d.password);
+
+                if (!kimlik || kimlik.rol !== 'yonetici') {
+                    res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: false, message: 'Rol atamayı yalnızca yönetici yapabilir.' }));
+                    return;
+                }
+
+                const yeniRol = (d.rol || '').trim().toLowerCase();
+                if (!ROLLER.includes(yeniRol)) {
+                    res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: false, message: 'Geçersiz rol. Geçerli roller: ' + ROLLER.join(', ') }));
+                    return;
+                }
+
+                const dbPath = path.join(__dirname, 'veritabani', 'yazarlar_veritabani.json');
+                const db = veritabaniOku();
+                if (!db) {
+                    res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: false, message: 'Veritabanı okunamadı.' }));
+                    return;
+                }
+
+                const hedef = db.find(a => (a.name || '').trim().toLocaleUpperCase('tr') === (d.hedefAd || '').trim().toLocaleUpperCase('tr'));
+                if (!hedef) {
+                    res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: false, message: 'Kullanıcı bulunamadı.' }));
+                    return;
+                }
+
+                hedef.rol = yeniRol;
+                fs.writeFileSync(dbPath, JSON.stringify(db, null, 2), 'utf8');
+
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ success: true, message: `${hedef.name} → ${yeniRol}` }));
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ success: false, message: 'Sunucu hatası: ' + e.message }));
+            }
+        });
+        return;
+    }
+
     // API: Yönetici İçin Onay Bekleyen Yazıları Listeleme
     if (req.method === 'GET' && pathname === '/api/pending-articles') {
         const urlParams = urlObj.searchParams;
         const u = urlParams.get('username') || '';
         const p = urlParams.get('password') || '';
 
-        if (!yoneticiMi(u, p)) {
+        const kimlik = kimlikCozumle(u, p);
+
+        if (!kimlik || (kimlik.rol !== 'yonetici' && kimlik.rol !== 'denetim')) {
             res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
-            res.end(JSON.stringify({ success: false, message: 'Bu veriyi yalnızca yönetici görebilir.' }));
+            res.end(JSON.stringify({ success: false, message: 'Bu veriyi yalnızca yönetici ve denetim yetkisi olanlar görebilir.' }));
             return;
         }
 
-        const bekleyenler = getBekleyenYazilar();
+        let bekleyenler = getBekleyenYazilar();
+
+        /* ÇIKAR ÇATIŞMASI: denetim yetkisi olan kişi de bir yazardır ve kendi
+           yazısını gönderebilir. Kendi gönderisini onaylamasın diye listeden
+           tamamen çıkarılır — göremediğini onaylayamaz. Yönetici hepsini görür. */
+        if (kimlik.rol === 'denetim') {
+            const kendi = (kimlik.yazarAdi || '').toLocaleUpperCase('tr');
+            bekleyenler = bekleyenler.filter(b => (b.authorName || '').toLocaleUpperCase('tr') !== kendi);
+        }
+
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-        res.end(JSON.stringify({ success: true, pendingArticles: bekleyenler }));
+        res.end(JSON.stringify({ success: true, pendingArticles: bekleyenler, rol: kimlik.rol }));
         return;
     }
 
@@ -598,9 +768,11 @@ const server = http.createServer((req, res) => {
                 const data = JSON.parse(body || '{}');
                 const { username, password, id, action } = data;
 
-                if (!yoneticiMi(username, password)) {
+                const kimlik = kimlikCozumle(username, password);
+
+                if (!kimlik || (kimlik.rol !== 'yonetici' && kimlik.rol !== 'denetim')) {
                     res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
-                    res.end(JSON.stringify({ success: false, message: 'Bu işlemi yalnızca yönetici yapabilir.' }));
+                    res.end(JSON.stringify({ success: false, message: 'Bu işlemi yalnızca yönetici ve denetim yetkisi olanlar yapabilir.' }));
                     return;
                 }
 
@@ -624,6 +796,16 @@ const server = http.createServer((req, res) => {
                 }
 
                 const targetItem = bekleyenler[itemIndex];
+
+                /* ÇIKAR ÇATIŞMASI KAPISI — listeleme zaten kendi yazısını
+                   gizliyor, ama bu asıl koruma: kimliği doğrudan bu uç noktaya
+                   istek atarak listeyi atlayamasın. Kimse kendi yazısını
+                   onaylayamaz/reddedemez. */
+                if (!onaylayabilirMi(kimlik, targetItem.authorName)) {
+                    res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: false, message: 'Kendi yazınızı onaylayamaz veya reddedemezsiniz. Bu yazıyı başka bir yetkili değerlendirmelidir.' }));
+                    return;
+                }
 
                 if (action === 'reject') {
                     /* Reddedilen yazı SİLİNMİYOR — yazar durumunu görebilsin ve

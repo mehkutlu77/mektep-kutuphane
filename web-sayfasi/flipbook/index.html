@@ -1036,9 +1036,12 @@ async function yazarVerisiYukle() {
     }
   }
 
-  // Okuyucu: PDF/Word indirme kapalı, Paylaş sadece sayfa linkini paylaşır.
-  // Yazar ve yönetici girişinde bu fonksiyonlar tam olarak aktif kalır.
-  window.OKUYUCU_MU = (role !== 'admin' && role !== 'author');
+  /* Okuyucu: PDF/Word indirme kapalı, Paylaş sadece sayfa linkini paylaşır.
+     Yazar, denetim ve yönetici girişinde bu fonksiyonlar tam aktif kalır.
+     'denetim' de bir yazardır — kendi kitapçığını normal yazar gibi düzenler;
+     onun ayrıcalığı BAŞKALARININ yazılarını onaylayabilmesi (sunucuda).
+     'okuyucu' rolü ve giriş yapmamış ziyaretçi burada okuyucu sayılır. */
+  window.OKUYUCU_MU = (role !== 'admin' && role !== 'author' && role !== 'denetim');
   const pdfBtn = $('pdf-btn'), wordBtn = $('word-btn');
   if (pdfBtn) pdfBtn.style.display = window.OKUYUCU_MU ? 'none' : 'inline-flex';
   if (wordBtn) wordBtn.style.display = window.OKUYUCU_MU ? 'none' : 'inline-flex';
