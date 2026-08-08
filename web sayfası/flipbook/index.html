@@ -985,7 +985,7 @@ async function yazarVerisiYukle() {
 
   // 1. Sunucu çalışıyorsa veritabanı JSON'unu çek
   try {
-    const fetchUrl = window.location.protocol === 'file:' ? '../yazarlar_veritabani.json' : '/yazarlar_veritabani.json';
+    const fetchUrl = window.location.protocol === 'file:' ? '../veritabani/yazarlar_veritabani.json' : '/veritabani/yazarlar_veritabani.json';
     const res = await fetch(fetchUrl);
     if (res.ok) {
       const db = await res.json();

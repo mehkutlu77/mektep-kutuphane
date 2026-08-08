@@ -54,7 +54,7 @@ function kullaniciAdiBozukMu(username) {
 }
 
 function dbKullaniciGuncelle() {
-    const dbPath = path.join(__dirname, 'yazarlar_veritabani.json');
+    const dbPath = path.join(__dirname, 'veritabani', 'yazarlar_veritabani.json');
     if (!fs.existsSync(dbPath)) return;
     try {
         let raw = fs.readFileSync(dbPath, 'utf8');
@@ -102,8 +102,8 @@ function dbKullaniciGuncelle() {
 }
 
 // Yönetici kimlik bilgisi yönetimi (admin_hesap.json)
-const ADMIN_HESAP_PATH = path.join(__dirname, 'admin_hesap.json');
-const BEKLEYEN_YAZILAR_PATH = path.join(__dirname, 'bekleyen_yazilar.json');
+const ADMIN_HESAP_PATH = path.join(__dirname, 'veritabani', 'admin_hesap.json');
+const BEKLEYEN_YAZILAR_PATH = path.join(__dirname, 'veritabani', 'bekleyen_yazilar.json');
 
 function getAdminHesap() {
     if (fs.existsSync(ADMIN_HESAP_PATH)) {
@@ -196,7 +196,7 @@ let taramaCalisiyor = false;
 let yaziEkleniyor = false;
 
 function veritabaniOzeti() {
-    const dbPath = path.join(__dirname, 'yazarlar_veritabani.json');
+    const dbPath = path.join(__dirname, 'veritabani', 'yazarlar_veritabani.json');
     if (!fs.existsSync(dbPath)) return { yazar: 0, makale: 0 };
     try {
         const db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
@@ -249,7 +249,7 @@ const server = http.createServer((req, res) => {
                         return;
                     }
                 } else if (role === 'author') {
-                    const dbPath = path.join(__dirname, 'yazarlar_veritabani.json');
+                    const dbPath = path.join(__dirname, 'veritabani', 'yazarlar_veritabani.json');
                     if (fs.existsSync(dbPath)) {
                         const db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
                         const author = db.find(a => (a.username || nameToUsername(a.name)) === uName && (a.password || 'mektep123') === pwd);
@@ -347,7 +347,7 @@ const server = http.createServer((req, res) => {
                     return;
                 }
 
-                const dbPath = path.join(__dirname, 'yazarlar_veritabani.json');
+                const dbPath = path.join(__dirname, 'veritabani', 'yazarlar_veritabani.json');
                 let authorRecord = null;
                 if (fs.existsSync(dbPath)) {
                     const db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
@@ -466,7 +466,7 @@ const server = http.createServer((req, res) => {
                 }
 
                 if (action === 'approve') {
-                    const dbPath = path.join(__dirname, 'yazarlar_veritabani.json');
+                    const dbPath = path.join(__dirname, 'veritabani', 'yazarlar_veritabani.json');
                     let db;
                     try {
                         db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
@@ -509,17 +509,22 @@ const server = http.createServer((req, res) => {
                     saveBekleyenYazilar(bekleyenler);
 
                     // exec('node build_library.js && node generate_pdf_kit.js', { cwd: __dirname }, (err, stdout, stderr) => {
+                    //     if (err) {
+                    //         console.error('Derleme hatası:', err);
+                    //     }
+                    //     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                    //     res.end(JSON.stringify({
+                    //         success: true,
+                    //         message: `"${targetItem.title}" başlıklı yazı onaylandı, veritabanına kaydedildi ve kütüphanede yayınlandı!`
+                    //     }));
+                    // });
+
                     yaziEkleniyor = false;
-                    if (false) { // Disabled block
-                        if (err) {
-                            console.error('Derleme hatası:', err);
-                        }
-                        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-                        res.end(JSON.stringify({
-                            success: true,
-                            message: `"${targetItem.title}" başlıklı yazı onaylandı, veritabanına kaydedildi ve kütüphanede yayınlandı!`
-                        }));
-                    });
+                    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({
+                        success: true,
+                        message: `"${targetItem.title}" başlıklı yazı onaylandı, veritabanına kaydedildi ve kütüphanede yayınlandı!`
+                    }));
                     return;
                 }
 
@@ -561,7 +566,7 @@ const server = http.createServer((req, res) => {
                 }
 
                 // 1. Read database
-                const dbPath = path.join(__dirname, 'yazarlar_veritabani.json');
+                const dbPath = path.join(__dirname, 'veritabani', 'yazarlar_veritabani.json');
                 if (!fs.existsSync(dbPath)) {
                     res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
                     res.end(JSON.stringify({ success: false, error: 'Veritabanı dosyası bulunamadı.' }));
@@ -670,7 +675,7 @@ const server = http.createServer((req, res) => {
                 return;
             }
 
-            const dbPath = path.join(__dirname, 'yazarlar_veritabani.json');
+            const dbPath = path.join(__dirname, 'veritabani', 'yazarlar_veritabani.json');
             let db;
             try {
                 db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
@@ -808,7 +813,7 @@ const server = http.createServer((req, res) => {
                     // "yonetici/mektep123" ile giren yönetici burada 403 alıyordu.
                     if (yoneticiMi(username, password)) authorized = true;
                 } else if (role === 'author') {
-                    const dbPath = path.join(__dirname, 'yazarlar_veritabani.json');
+                    const dbPath = path.join(__dirname, 'veritabani', 'yazarlar_veritabani.json');
                     if (fs.existsSync(dbPath)) {
                         const db = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
                         const author = db.find(a => a.name === authorRealName);
@@ -825,7 +830,7 @@ const server = http.createServer((req, res) => {
                 }
 
                 // 1. Read database
-                const dbPath = path.join(__dirname, 'yazarlar_veritabani.json');
+                const dbPath = path.join(__dirname, 'veritabani', 'yazarlar_veritabani.json');
                 const dbContent = fs.readFileSync(dbPath, 'utf8');
                 const db = JSON.parse(dbContent);
 
