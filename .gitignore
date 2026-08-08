@@ -20,3 +20,8 @@ Thumbs.db
 .idea/
 *.swp
 .vercel
+
+# Yedek ve yardımcı klasörler
+KAYNAK-ARAÇLAR/
+web\ sayfası\ kopyası/
+admin_hesap.json
