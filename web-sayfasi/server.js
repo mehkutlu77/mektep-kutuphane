@@ -373,13 +373,25 @@ const server = http.createServer((req, res) => {
                    parametresi artık yalnızca ESKİ istemcilerle uyum için
                    okunuyor, karara etkisi yok.
 
-                   Geriye dönük uyum: 'yonetici' rolü dışarıya 'admin' olarak
-                   bildirilir; mevcut sayfalar userRole==='admin' kontrolü
-                   yapıyor ve bunların hepsini değiştirmek gereksiz risk. */
+                   GERİYE DÖNÜK UYUM — DİKKAT (2026-08-08'de hatalı yapıldı):
+                   Sayfalar rolü İngilizce eski adlarıyla kontrol ediyor
+                   (userRole === 'admin' / 'author'). İlk denemede yalnızca
+                   'yonetici' → 'admin' eşlemesi yapıldı, 'yazar' olduğu gibi
+                   döndü; sonuç: kütüphanedeki "yalnızca kendi kitabın" süzgeci,
+                   kitapçıktaki Düzenle düğmesi ve PDF/Word indirme sessizce
+                   devre dışı kaldı — yazar bütün kitapları görür oldu.
+                   Bu yüzden eşleme artık TAM ve tek yerde yapılıyor. */
+                const DIS_ROL = {
+                    yonetici: 'admin',
+                    yazar: 'author',
+                    denetim: 'denetim',
+                    okuyucu: 'okuyucu'
+                };
+
                 const kimlik = kimlikCozumle(username, password);
 
                 if (kimlik) {
-                    const disRol = kimlik.rol === 'yonetici' ? 'admin' : kimlik.rol;
+                    const disRol = DIS_ROL[kimlik.rol] || 'author';
                     const cevap = { success: true, role: disRol, gercekRol: kimlik.rol };
 
                     if (kimlik.yazar) {

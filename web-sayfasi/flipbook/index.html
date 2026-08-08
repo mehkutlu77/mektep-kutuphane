@@ -1017,7 +1017,12 @@ async function yazarVerisiYukle() {
   if (editBtn) {
     if (role === 'admin') {
       editBtn.style.display = 'inline-flex';
-    } else if (role === 'author') {
+    } else if (role === 'author' || role === 'denetim') {
+      /* 'denetim' de bir yazardır: kendi kitapçığını normal yazar gibi
+         düzenler. Onay yetkisi ayrı bir şey ve panelde kullanılıyor.
+         Bu dal eklenmeseydi denetim yetkisi verilen kişi KENDİ kitapçığını
+         düzenleyemez hâle gelirdi. Aşağıdaki sahiplik kontrolü yine geçerli:
+         denetim de yalnızca kendi kitabını düzenleyebilir. */
       const userAuthorName = (localStorage.getItem('authorRealName') || '').trim().toLocaleUpperCase('tr');
       const username = (localStorage.getItem('username') || '').trim().toLowerCase();
       const currentAuthorName = (guncelYazarVerisi && guncelYazarVerisi.name ? guncelYazarVerisi.name : '').trim().toLocaleUpperCase('tr');

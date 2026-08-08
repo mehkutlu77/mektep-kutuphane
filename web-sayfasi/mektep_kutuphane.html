@@ -1155,8 +1155,13 @@
         if (role === 'admin') {
             document.getElementById('yonetim-butonu').style.display = 'inline-flex';
             document.getElementById('hosgeldiniz-mesaj').innerHTML = '👋 Hoş geldiniz, <strong>Yönetici</strong>';
-        } else if (role === 'author') {
-            document.getElementById('yonetim-butonu').style.display = 'none';
+        } else if (role === 'author' || role === 'denetim') {
+            /* 'denetim' de bir yazardır — rafta kendi kitabını görür.
+               Ayrıcalığı BAŞKALARININ yazılarını onaylamak ve bu onay
+               panelde yapılıyor, kütüphanede değil. Onay panelinin düğmesi
+               denetim için de gösteriliyor. */
+            document.getElementById('yonetim-butonu').style.display =
+                (role === 'denetim') ? 'inline-flex' : 'none';
 
             // Giriş kullanıcı adına göre GERÇEK ad/kimliği eşlemeden çöz —
             // localStorage'daki authorRealName login.html'in (yanlış olabilecek)
@@ -1169,7 +1174,9 @@
                 localStorage.setItem('authorRealName', yazarIsim);
                 localStorage.setItem('authorId', yazarId);
             }
-            document.getElementById('hosgeldiniz-mesaj').innerHTML = '✍️ Hoş geldiniz Yazar, <strong>' + yazarIsim + '</strong>';
+            document.getElementById('hosgeldiniz-mesaj').innerHTML =
+                (role === 'denetim' ? '🛡️ Hoş geldiniz Denetim, <strong>' : '✍️ Hoş geldiniz Yazar, <strong>')
+                + yazarIsim + '</strong>';
 
             // YAZAR girişinde özet kart + popup YOK: yazar kendi sayfasına
             // girdiğinde bütün kitapları doğrudan rafta yan yana görmeli
