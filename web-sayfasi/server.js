@@ -936,6 +936,51 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    /* ── DIŞARI AÇILMAYACAK DOSYALAR (2026-08-08) ───────────────────────────
+       Statik servis, klasördeki HER dosyayı olduğu gibi veriyordu. Sitede
+       şunlar tarayıcıdan indirilebiliyordu:
+         • veritabani/yazarlar_veritabani.json → 61 yazarın kullanıcı adı VE
+           açık şifresi
+         • server.js → varsayılan yönetici parolası kaynak kodda yazılı
+         • bekleyen_yazilar.json → henüz yayımlanmamış yazı metinleri
+       Adresi bilen herkes istediği yazar olarak giriş yapabiliyordu.
+
+       Not: flipbook, yazar adı ve yazı listesi için veritabanını tarayıcıdan
+       ÇEKİYOR; bu yüzden dosya tümden kapatılamaz. Aşağıda kimlik alanları
+       ayıklanmış bir kopyası sunuluyor — flipbook çalışmaya devam ediyor. */
+    const istenen = safePathname.replace(/^\/+/, '');
+
+    if (istenen === 'veritabani/yazarlar_veritabani.json') {
+        fs.readFile(path.join(WEB_KOK, 'veritabani', 'yazarlar_veritabani.json'), 'utf8', (err, ham) => {
+            if (err) {
+                res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+                res.end('File Not Found');
+                return;
+            }
+            try {
+                const temiz = JSON.parse(ham).map(({ username, password, ...kalan }) => kalan);
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify(temiz));
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+                res.end('Database read error');
+            }
+        });
+        return;
+    }
+
+    const GIZLI_DOSYALAR = new Set([
+        'server.js', 'build_library.js', 'generate_pdf_kit.js', 'decode-pdfs.js',
+        'package.json', 'package-lock.json', 'vercel.json',
+        'Mac_Baslat.command', 'Windows_Baslat.bat'
+    ]);
+
+    if (GIZLI_DOSYALAR.has(istenen) || istenen.startsWith('veritabani/') || istenen.startsWith('.')) {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('File Not Found');
+        return;
+    }
+
     fs.stat(filePath, (err, stats) => {
         if (err || !stats.isFile()) {
             res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
