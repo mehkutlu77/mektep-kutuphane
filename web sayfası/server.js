@@ -5,9 +5,8 @@ const { exec } = require('child_process');
 
 const PORT = 3000;
 
-// Statik dosyaların kökü. Vercel'de server.js root'da çalışıyor.
-// web sayfası/ klasörü içindeki HTML ve diğer dosyaları serve et.
-const WEB_KOK = path.join(__dirname, 'web sayfası');
+// Statik dosyaların kökü. server.js zaten web sayfası/ içinde, __dirname doğrudan burada.
+const WEB_KOK = __dirname;
 
 // MIME types lookup
 const MIME_TYPES = {
