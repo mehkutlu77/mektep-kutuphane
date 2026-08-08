@@ -1,9 +1,15 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 
-const PORT = 3000;
+/* Sunucu portu. Render/Heroku gibi platformlar portu PORT ortam değişkeniyle
+   dayatır; sabit 3000 bırakılırsa platform "yanlış portu dinliyor" deyip
+   dağıtımı yeniden başlatmak zorunda kalır (Render ilk dağıtımda tam bunu
+   yaptı: "New primary port detected: 3000. Restarting deploy..."). Ortam
+   değişkeni yoksa yerelde eskisi gibi 3000 kullanılır — Mac_Baslat.command ve
+   Windows_Baslat.bat localhost:3000 açtığı için bu şart. */
+const PORT = process.env.PORT || 3000;
 
 // Statik dosyaların kökü. server.js zaten web sayfası/ içinde, __dirname doğrudan burada.
 const WEB_KOK = __dirname;
@@ -92,13 +98,38 @@ function dbKullaniciGuncelle() {
             // (örn. havuz kökünden `node "30. PROGRAM .../server.js"`) script
             // adı bulunamaz ve sessizce başarısız olur. /api/sync'te zaten
             // vardı, bu üç çağrıda eksikti.
-            // exec('node build_library.js', { cwd: __dirname }, (err, stdout) => {
-            //     if (!err) console.log("✓ Kütüphane yeni kimlik bilgileriyle yeniden oluşturuldu.");
-            // });
+            exec('node build_library.js', { cwd: __dirname, maxBuffer: 50 * 1024 * 1024 }, (err, stdout) => {
+                if (!err) console.log("✓ Kütüphane yeni kimlik bilgileriyle yeniden oluşturuldu.");
+                else console.error("Kütüphane yeniden oluşturulamadı:", err.message);
+            });
         }
     } catch(e) {
         console.error("Kullanıcı güncellerken hata oluştu:", e);
     }
+}
+
+/* KİTAPÇIK + KÜTÜPHANE YENİDEN ÜRETİMİ
+   Bir yazı eklendiğinde/onaylandığında iki şeyin yenilenmesi gerekir:
+     1) generate_pdf_kit.js → yazarın kitapçık PDF'i (flipbook/data/*.js) ve
+        veritabanına sayfa/İçindekiler bilgisi
+     2) build_library.js    → kütüphane + yönetim sayfaları (istatistikler)
+   SIRA ÖNEMLİ: (1) veritabanını zenginleştirir, (2) o veriden sayfa üretir.
+
+   `yazarAdi` verilirse yalnızca o yazarın kitapçığı üretilir (~1 sn);
+   verilmezse tüm yazarlar (~41 sn bu makinede, ücretsiz sunucuda dakikalarca).
+   execFile kullanılıyor: yazar adları boşluk ve Türkçe karakter içerdiği için
+   kabuk üzerinden geçirmek riskli. */
+function yenidenUret(yazarAdi, callback) {
+    const opts = { cwd: __dirname, maxBuffer: 50 * 1024 * 1024 };
+    const args = yazarAdi ? ['generate_pdf_kit.js', yazarAdi] : ['generate_pdf_kit.js'];
+
+    execFile('node', args, opts, (err, stdout, stderr) => {
+        if (err) return callback(err, stderr);
+        execFile('node', ['build_library.js'], opts, (err2, stdout2, stderr2) => {
+            if (err2) return callback(err2, stderr2);
+            callback(null, null);
+        });
+    });
 }
 
 // Yönetici kimlik bilgisi yönetimi (admin_hesap.json)
@@ -508,23 +539,40 @@ const server = http.createServer((req, res) => {
                     bekleyenler.splice(itemIndex, 1);
                     saveBekleyenYazilar(bekleyenler);
 
-                    // exec('node build_library.js && node generate_pdf_kit.js', { cwd: __dirname }, (err, stdout, stderr) => {
-                    //     if (err) {
-                    //         console.error('Derleme hatası:', err);
-                    //     }
-                    //     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-                    //     res.end(JSON.stringify({
-                    //         success: true,
-                    //         message: `"${targetItem.title}" başlıklı yazı onaylandı, veritabanına kaydedildi ve kütüphanede yayınlandı!`
-                    //     }));
-                    // });
+                    /* SIRA ÖNEMLİ: generate_pdf_kit.js önce çalışmalı — kitapçık
+                       PDF'lerini üretirken veritabanına sayfa/İçindekiler bilgisi
+                       de yazıyor. build_library.js sonra çalışıp o zenginleşmiş
+                       veritabanından istatistikleri ve sayfaları üretiyor.
+                       2026-08-08: burada sıra TERSTİ (önce build_library) — bu
+                       yüzden onaylanan yazı ne kitapçığa ne de istatistiklere
+                       yansıyordu. Diğer çağrılardaki (satır ~758) doğru kalıba
+                       eşitlendi; maxBuffer da eklendi, 60 yazarın çıktısı
+                       varsayılan 1 MB tamponu taşırıyor. */
+                    const onayBaslangic = Date.now();
+                    console.log(`▶ Onay: ${db[idx].name} — "${targetItem.title}". Kitapçık yeniden üretiliyor...`);
 
-                    yaziEkleniyor = false;
-                    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-                    res.end(JSON.stringify({
-                        success: true,
-                        message: `"${targetItem.title}" başlıklı yazı onaylandı, veritabanına kaydedildi ve kütüphanede yayınlandı!`
-                    }));
+                    yenidenUret(db[idx].name, (err, stderr) => {
+                        yaziEkleniyor = false;
+                        const saniye = Math.round((Date.now() - onayBaslangic) / 1000);
+
+                        if (err) {
+                            console.error('Onay sonrası kitapçık üretimi başarısız:', err);
+                            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+                            res.end(JSON.stringify({
+                                success: false,
+                                message: 'Yazı veritabanına kaydedildi ama kitapçıklar yeniden üretilemedi.',
+                                detay: (stderr || err.message || '').slice(0, 500)
+                            }));
+                            return;
+                        }
+
+                        console.log(`✓ Onay tamamlandı (${saniye} sn).`);
+                        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                        res.end(JSON.stringify({
+                            success: true,
+                            message: `"${targetItem.title}" başlıklı yazı onaylandı, veritabanına kaydedildi ve kütüphanede yayınlandı!`
+                        }));
+                    });
                     return;
                 }
 
@@ -753,12 +801,9 @@ const server = http.createServer((req, res) => {
 
             yaziEkleniyor = true;
             const baslangic = Date.now();
-            console.log(`▶ Elle yazı ${islem}: ${yazar.name} — "${baslikBuyuk}". Kitapçıklar yeniden üretiliyor...`);
+            console.log(`▶ Elle yazı ${islem}: ${yazar.name} — "${baslikBuyuk}". Kitapçık yeniden üretiliyor...`);
 
-            exec('node generate_pdf_kit.js && node build_library.js', {
-                cwd: __dirname,
-                maxBuffer: 50 * 1024 * 1024
-            }, (err, stdout, stderr) => {
+            yenidenUret(yazar.name, (err, stderr) => {
                 yaziEkleniyor = false;
                 const saniye = Math.round((Date.now() - baslangic) / 1000);
 
@@ -853,14 +898,13 @@ const server = http.createServer((req, res) => {
 
                 // 4. Run scripts sequentially to regenerate PDFs and rebuilding library
                 console.log('Regenerating PDFs and rebuilding library...');
-                exec('node generate_pdf_kit.js && node build_library.js', { cwd: __dirname }, (err, stdout, stderr) => {
+                yenidenUret(db[authorIndex].name, (err, stderr) => {
                     if (err) {
                         console.error('Error running build scripts:', err);
                         res.writeHead(500, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ error: 'Failed to regenerate PDFs', details: stderr }));
                         return;
                     }
-                    console.log(stdout);
                     console.log('✓ Rebuild complete.');
 
                     res.writeHead(200, { 'Content-Type': 'application/json' });
